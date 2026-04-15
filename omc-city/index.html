@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>City Walk</title>
+  <link rel="icon" href="data:image/svg+xml;utf8,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'&gt;&lt;rect width='32' height='32' fill='%232a6fd8'/&gt;&lt;text x='16' y='22' font-size='20' text-anchor='middle' fill='white'&gt;C&lt;/text&gt;&lt;/svg&gt;" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #1a1f28;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #fff;
+    }
+    #gameCanvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+    .hud {
+      position: fixed;
+      pointer-events: none;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+      user-select: none;
+    }
+    #hud-title {
+      top: 14px;
+      left: 18px;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+    }
+    #hud-fps {
+      top: 14px;
+      right: 18px;
+      font-size: 14px;
+      background: rgba(0,0,0,0.35);
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    #hud-pos {
+      bottom: 14px;
+      left: 18px;
+      font-size: 14px;
+      background: rgba(0,0,0,0.35);
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    #hud-hint {
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 13px;
+      opacity: 0.85;
+      background: rgba(0,0,0,0.35);
+      padding: 4px 10px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    #hud-gear {
+      display: none;
+      bottom: 52px;
+      right: 18px;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      background: rgba(0,0,0,0.55);
+      padding: 8px 14px;
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 6px;
+      min-width: 60px;
+      text-align: center;
+    }
+    #hud-gear .gear-label {
+      font-size: 11px;
+      opacity: 0.6;
+      font-weight: 500;
+      letter-spacing: 0.25em;
+      display: block;
+    }
+    /* Tachometer — shown while driving */
+    #hud-tach {
+      display: none;
+      position: fixed;
+      right: 18px;
+      bottom: 120px;
+      width: 260px;
+      background: rgba(0,0,0,0.55);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 8px;
+      padding: 8px 10px;
+      pointer-events: none;
+      user-select: none;
+    }
+    #hud-tach-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      opacity: 0.8;
+      letter-spacing: 0.15em;
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+    #hud-tach-bar {
+      position: relative;
+      height: 14px;
+      background: linear-gradient(90deg,
+        #2a6b2a 0%,
+        #4aae4a 40%,
+        #b5a833 65%,
+        #c47024 82%,
+        #c23030 92%,
+        #ff3030 100%);
+      border-radius: 3px;
+      overflow: hidden;
+      border: 1px solid rgba(0,0,0,0.4);
+    }
+    #hud-tach-cover {
+      position: absolute;
+      top: 0; right: 0; bottom: 0;
+      background: rgba(15,18,24,0.85);
+      width: 100%;
+      transition: width 0.06s linear;
+    }
+    #hud-tach-value {
+      font-size: 13px;
+      margin-top: 4px;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.04em;
+      display: flex;
+      justify-content: space-between;
+    }
+    #hud-shift-light {
+      display: none;
+      position: fixed;
+      right: 18px;
+      bottom: 220px;
+      background: #ff3030;
+      color: #fff;
+      font-weight: 800;
+      font-size: 14px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      letter-spacing: 0.15em;
+      box-shadow: 0 0 16px rgba(255,48,48,0.7);
+      animation: flashpulse 0.35s ease-in-out infinite alternate;
+    }
+    #hud-lug-light {
+      display: none;
+      position: fixed;
+      right: 18px;
+      bottom: 220px;
+      background: #e8a23a;
+      color: #1a1a1a;
+      font-weight: 800;
+      font-size: 14px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      letter-spacing: 0.15em;
+    }
+    #hud-stall {
+      display: none;
+      position: fixed;
+      left: 50%;
+      top: 35%;
+      transform: translate(-50%, -50%);
+      background: rgba(180,20,20,0.92);
+      color: #fff;
+      font-weight: 800;
+      font-size: 22px;
+      padding: 14px 24px;
+      border: 2px solid rgba(255,255,255,0.6);
+      border-radius: 10px;
+      letter-spacing: 0.12em;
+      text-align: center;
+      box-shadow: 0 0 32px rgba(200,20,20,0.6);
+    }
+    #hud-stall .sub {
+      font-size: 13px;
+      font-weight: 500;
+      opacity: 0.85;
+      margin-top: 6px;
+      letter-spacing: 0.04em;
+    }
+    @keyframes flashpulse {
+      from { opacity: 0.6; transform: scale(1.0); }
+      to   { opacity: 1.0; transform: scale(1.05); }
+    }
+    #hud-prompt {
+      display: none;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) translateY(60px);
+      font-size: 16px;
+      font-weight: 600;
+      background: rgba(0,0,0,0.65);
+      padding: 8px 14px;
+      border: 1px solid rgba(255,255,255,0.5);
+      border-radius: 6px;
+    }
+    #dialog {
+      display: none;
+      position: fixed;
+      bottom: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(600px, 80vw);
+      background: rgba(20,24,32,0.92);
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 10px;
+      padding: 16px 20px;
+      color: #fff;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      pointer-events: none;
+      user-select: none;
+    }
+    #dialog-name {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      letter-spacing: 0.04em;
+      color: #ffd28a;
+    }
+    #dialog-text {
+      font-size: 15px;
+      line-height: 1.4;
+      font-style: italic;
+    }
+    #dialog-close {
+      margin-top: 10px;
+      font-size: 12px;
+      opacity: 0.7;
+    }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <div id="hud-title" class="hud">CITY WALK</div>
+  <div id="hud-fps" class="hud">FPS: --</div>
+  <div id="hud-pos" class="hud">X: 0.0  Z: 0.0</div>
+  <div id="hud-hint" class="hud">WASD move/steer · SHIFT sprint/boost · 1-6 gears · 7 reverse · S auto-brakes & reverses · SPACE jump · E ride / talk · click for mouse-look</div>
+  <div id="hud-prompt" class="hud"></div>
+  <div id="hud-gear" class="hud"><span class="gear-label">GEAR</span><span id="hud-gear-val">1</span></div>
+  <div id="hud-tach">
+    <div id="hud-tach-row"><span>RPM</span><span id="hud-tach-gear">GEAR 1</span></div>
+    <div id="hud-tach-bar"><div id="hud-tach-cover"></div></div>
+    <div id="hud-tach-value"><span id="hud-rpm-num">1400</span><span id="hud-speed-num">0 km/h</span></div>
+  </div>
+  <div id="hud-shift-light">▲ SHIFT UP</div>
+  <div id="hud-lug-light">▼ DOWNSHIFT</div>
+  <div id="hud-stall">ENGINE STALLED<div class="sub">Press 1 to restart</div></div>
+  <div id="dialog">
+    <div id="dialog-name"></div>
+    <div id="dialog-text"></div>
+    <div id="dialog-close">Press E or ESC to close</div>
+  </div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
