@@ -208,7 +208,7 @@ function init() {
   const saleIframe = document.getElementById('sale-iframe');
   const saleIframeClose = document.getElementById('sale-iframe-close');
   const saleIframeTitle = document.getElementById('sale-iframe-title');
-  const SALE_URL = 'https://app.whatslocal.ai/business/132';
+  const SALE_URL = 'http://127.0.0.1:8788/business/132';
 
   let currentNearShop = null;
   let dialogOpen = false;
