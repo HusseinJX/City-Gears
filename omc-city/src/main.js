@@ -145,11 +145,20 @@ function init() {
     }
 
     for (const shop of cityInfo.shops || []) {
+      for (const marker of shop.crowdMarkers || []) {
+        const { sx, sy } = worldToMM(marker.x, marker.z, playerX, playerZ);
+        if (sx < 0 || sx > MM_SIZE || sy < 0 || sy > MM_SIZE) continue;
+        mmCtx.beginPath();
+        mmCtx.arc(sx, sy, 2.2, 0, Math.PI * 2);
+        mmCtx.fillStyle = shop.minimapColor || '#ffd28a';
+        mmCtx.fill();
+      }
+
       const { sx, sy } = worldToMM(shop.ownerPos.x, shop.ownerPos.z, playerX, playerZ);
       if (sx < 0 || sx > MM_SIZE || sy < 0 || sy > MM_SIZE) continue;
       mmCtx.beginPath();
-      mmCtx.arc(sx, sy, 3.5, 0, Math.PI * 2);
-      mmCtx.fillStyle = '#ffd28a';
+      mmCtx.arc(sx, sy, shop.crowdMarkers ? 5 : 3.5, 0, Math.PI * 2);
+      mmCtx.fillStyle = shop.minimapColor || '#ffd28a';
       mmCtx.fill();
     }
 
@@ -208,11 +217,15 @@ function init() {
   const saleIframe = document.getElementById('sale-iframe');
   const saleIframeClose = document.getElementById('sale-iframe-close');
   const saleIframeTitle = document.getElementById('sale-iframe-title');
-  const SALE_URL = 'http://127.0.0.1:8788/business/132';
+  const DEFAULT_SITE_URL = 'http://127.0.0.1:8788/business/132';
+  const DEFAULT_SITE_LABEL = 'WhatsLocal';
 
   let currentNearShop = null;
   let dialogOpen = false;
   let saleAvailable = false;
+  let currentSiteUrl = DEFAULT_SITE_URL;
+  let currentSiteLabel = DEFAULT_SITE_LABEL;
+  let currentSiteTitle = 'Sale';
   let playerMode = 'walk'; // 'walk' | 'drive'
   let currentVehicle = null;
 
@@ -222,8 +235,8 @@ function init() {
   }
   function openSaleIframe(shopName) {
     if (!saleIframeWrap || !saleIframe) return;
-    if (saleIframeTitle) saleIframeTitle.textContent = `${shopName} Sale`;
-    saleIframe.src = SALE_URL;
+    if (saleIframeTitle) saleIframeTitle.textContent = currentSiteTitle || `${shopName} Site`;
+    saleIframe.src = currentSiteUrl;
     saleIframeWrap.style.display = 'block';
   }
   if (saleIframeClose) saleIframeClose.addEventListener('click', closeSaleIframe);
@@ -234,13 +247,22 @@ function init() {
     if (dialogName) dialogName.textContent = shop.name;
     if (dialogText) dialogText.textContent = `"${shop.dialog}"`;
     if (dialogBox) dialogBox.style.display = 'block';
+    currentSiteUrl = shop.siteUrl || DEFAULT_SITE_URL;
+    currentSiteLabel = shop.siteLabel || DEFAULT_SITE_LABEL;
+    currentSiteTitle = shop.siteTitle || `${shop.name} Sale`;
     saleAvailable = true;
-    if (dialogSaleHint) dialogSaleHint.style.display = 'block';
+    if (dialogSaleHint) {
+      dialogSaleHint.textContent = `Press F to open ${currentSiteLabel}`;
+      dialogSaleHint.style.display = 'block';
+    }
     playDialogOpen();
   }
   function closeDialog() {
     dialogOpen = false;
     saleAvailable = false;
+    currentSiteUrl = DEFAULT_SITE_URL;
+    currentSiteLabel = DEFAULT_SITE_LABEL;
+    currentSiteTitle = 'Sale';
     if (dialogBox) dialogBox.style.display = 'none';
     if (dialogSaleHint) dialogSaleHint.style.display = 'none';
     closeSaleIframe();
@@ -385,12 +407,13 @@ function init() {
     if (playerMode === 'walk' && !dialogOpen) {
       const px = character.group.position.x;
       const pz = character.group.position.z;
-      let bestSq = shopRadius * shopRadius;
+      let bestSq = Infinity;
       for (const shop of cityInfo.shops) {
         const dx = shop.ownerPos.x - px;
         const dz = shop.ownerPos.z - pz;
         const dsq = dx * dx + dz * dz;
-        if (dsq < bestSq) { bestSq = dsq; nearShop = shop; }
+        const radius = shop.interactionRadius || shopRadius;
+        if (dsq < radius * radius && dsq < bestSq) { bestSq = dsq; nearShop = shop; }
       }
     }
 
@@ -401,7 +424,7 @@ function init() {
           promptMsg = 'Press E to get out';
         }
       } else if (nearShop) {
-        promptMsg = `Press E to talk to ${nearShop.name}`;
+        promptMsg = nearShop.prompt || `Press E to talk to ${nearShop.name}`;
       } else {
         const nearV = nearestMountableVehicle();
         if (nearV) {

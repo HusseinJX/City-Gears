@@ -221,8 +221,6 @@ export function createCity(scene) {
     }
   }
 
-  const shops = generateShops(group, blocks);
-
   // Spawn at the intersection closest to city center, offset onto a sidewalk
   // so the character doesn't start inside a road.
   const midX = xAxis[Math.floor(xAxis.length / 2)];
@@ -231,6 +229,9 @@ export function createCity(scene) {
     x: midX,
     z: midZ + C.roadWidth * 0.55, // just south of the intersection centerline
   };
+
+  const shops = generateShops(group, blocks);
+  shops.push(addSpaceAgeVisionAttraction(group, spawn));
 
   // For legacy compatibility (camera raycast, old code paths)
   const avgCell = (sizeX + sizeZ) / (xAxis.length + zAxis.length - 2);
@@ -559,6 +560,157 @@ function addRooftopFeature(group, bx, bz, bw, bd, h) {
     cluster.position.set(bx, y, bz);
     group.add(cluster);
   }
+}
+
+function makeSpaceAgeVisionTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 768;
+  canvas.height = 192;
+  const ctx = canvas.getContext('2d');
+
+  const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  grad.addColorStop(0, '#0b1024');
+  grad.addColorStop(0.45, '#1f7a8c');
+  grad.addColorStop(1, '#2a2f7f');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.strokeStyle = 'rgba(118,247,255,0.95)';
+  ctx.lineWidth = 10;
+  ctx.strokeRect(8, 8, canvas.width - 16, canvas.height - 16);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(0,0,0,0.7)';
+  ctx.shadowOffsetY = 4;
+  ctx.font = 'bold 58px -apple-system, Helvetica, Arial, sans-serif';
+  ctx.fillText('SPACE AGE', canvas.width / 2, 76);
+  ctx.font = 'bold 48px -apple-system, Helvetica, Arial, sans-serif';
+  ctx.fillText('VISION', canvas.width / 2, 134);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function makeCrowdPerson(shirtColor, pantsColor, hatColor = null) {
+  const g = new THREE.Group();
+  const skinMat = new THREE.MeshLambertMaterial({ color: 0xf3c8a4 });
+  const shirtMat = new THREE.MeshLambertMaterial({ color: shirtColor });
+  const pantsMat = new THREE.MeshLambertMaterial({ color: pantsColor });
+
+  const legs = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.85, 0.28), pantsMat);
+  legs.position.y = 0.425;
+  legs.castShadow = true;
+  g.add(legs);
+
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.62, 0.3), shirtMat);
+  torso.position.y = 1.16;
+  torso.castShadow = true;
+  g.add(torso);
+
+  const armGeo = new THREE.BoxGeometry(0.12, 0.55, 0.13);
+  for (const sx of [-0.29, 0.29]) {
+    const arm = new THREE.Mesh(armGeo, shirtMat);
+    arm.position.set(sx, 1.16, 0);
+    arm.castShadow = true;
+    g.add(arm);
+  }
+
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.32, 0.32), skinMat);
+  head.position.y = 1.68;
+  head.castShadow = true;
+  g.add(head);
+
+  if (hatColor !== null) {
+    const hat = new THREE.Mesh(
+      new THREE.BoxGeometry(0.36, 0.08, 0.36),
+      new THREE.MeshLambertMaterial({ color: hatColor })
+    );
+    hat.position.y = 1.9;
+    hat.castShadow = true;
+    g.add(hat);
+  }
+
+  return g;
+}
+
+function addSpaceAgeVisionAttraction(group, spawn) {
+  const baseY = CONFIG.city.sidewalkHeight;
+  const signX = spawn.x - 9.5;
+  const signZ = spawn.z + 7.5;
+  const targetX = spawn.x - 3.5;
+  const targetZ = spawn.z + 3.2;
+  const yaw = Math.atan2(targetX - signX, targetZ - signZ);
+
+  const platform = new THREE.Mesh(
+    new THREE.BoxGeometry(8.5, 0.14, 5.0),
+    new THREE.MeshLambertMaterial({ color: 0x26323a })
+  );
+  platform.position.set(signX + 1.0, baseY + 0.02, signZ - 0.6);
+  platform.castShadow = true;
+  platform.receiveShadow = true;
+  group.add(platform);
+
+  const signMat = new THREE.MeshBasicMaterial({
+    map: makeSpaceAgeVisionTexture(),
+    side: THREE.DoubleSide,
+  });
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(5.4, 1.35), signMat);
+  sign.position.set(signX, baseY + 3.1, signZ);
+  sign.rotation.y = yaw;
+  group.add(sign);
+
+  const postMat = new THREE.MeshLambertMaterial({ color: 0x1d2028 });
+  for (const sx of [-2.25, 2.25]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, 3.0, 0.18), postMat);
+    post.position.set(signX + Math.cos(yaw) * sx, baseY + 1.55, signZ - Math.sin(yaw) * sx);
+    post.castShadow = true;
+    group.add(post);
+  }
+
+  const glow = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.42, 0.42, 1.8, 16),
+    new THREE.MeshLambertMaterial({ color: 0x76f7ff, emissive: 0x174c55, emissiveIntensity: 0.7 })
+  );
+  glow.position.set(signX + 3.2, baseY + 0.95, signZ - 1.4);
+  glow.castShadow = true;
+  group.add(glow);
+
+  const crowdGroup = new THREE.Group();
+  crowdGroup.name = 'space-age-vision-crowd';
+  const colors = [0x5a8ad8, 0xd85a8a, 0x5ad88a, 0xd8c05a, 0xa85ad8, 0x5ad8d8];
+  const offsets = [
+    [-2.7, -1.9], [-1.6, -2.35], [-0.5, -2.1], [0.8, -2.45], [1.9, -1.9],
+    [-3.1, -0.6], [-1.95, -0.85], [-0.8, -0.55], [0.45, -0.95], [1.55, -0.55], [2.65, -0.85],
+    [-2.45, 0.65], [-1.2, 0.45], [0.15, 0.55], [1.45, 0.35], [2.55, 0.6],
+  ];
+  const crowdMarkers = offsets.map(([ox, oz]) => ({ x: signX + 1.1 + ox, z: signZ - 0.9 + oz }));
+  offsets.forEach(([ox, oz], i) => {
+    const person = makeCrowdPerson(colors[i % colors.length], 0x202028 + (i % 3) * 0x101010, i % 4 === 0 ? 0x76f7ff : null);
+    person.position.set(signX + 1.1 + ox, baseY + 0.08, signZ - 0.9 + oz);
+    person.rotation.y = Math.atan2(signX - person.position.x, signZ - person.position.z);
+    crowdGroup.add(person);
+  });
+  group.add(crowdGroup);
+
+  return {
+    name: 'Space Age Vision',
+    dialog: 'A crowd gathers around the Space Age Vision sign. They are sharing demos, futures, and strange new worlds.',
+    signColor: 0x1f7a8c,
+    facingYaw: yaw,
+    ownerPos: { x: targetX, z: targetZ },
+    signPos: { x: signX, y: baseY + 3.1, z: signZ },
+    prompt: 'Press E for Space Age Vision info',
+    siteUrl: 'https://spaceagevision.world',
+    siteLabel: 'spaceagevision.world',
+    siteTitle: 'Space Age Vision',
+    minimapColor: '#76f7ff',
+    crowdMarkers,
+    interactionRadius: 5.5,
+  };
 }
 
 // ---------- Shop signs (from original, placed on block edges) ----------
