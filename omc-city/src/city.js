@@ -166,6 +166,15 @@ export function createCity(scene) {
   const blocks = [];
   const obstacles = [];
   const buildingAABBs = [];
+  const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+  const centerRoadI = Math.floor(xAxis.length / 2);
+  const centerRoadJ = Math.floor(zAxis.length / 2);
+  const forcedParkI = clamp(centerRoadI - 1, 0, xAxis.length - 2);
+  const forcedParkJ = clamp(centerRoadJ - 1, 0, zAxis.length - 2);
+  const facilityI = clamp(centerRoadI, 0, xAxis.length - 2);
+  const facilityJ = clamp(centerRoadJ - 1, 0, zAxis.length - 2);
+  let spawnParkBlock = null;
+  let spaceFacilityBlock = null;
 
   // ---------- Per-block content ----------
   for (let i = 0; i < xAxis.length - 1; i++) {
@@ -198,12 +207,17 @@ export function createCity(scene) {
       else if (r < C.towerChance + C.parkChance) type = 'park';
       else if (r < C.towerChance + C.parkChance + C.restaurantChance) type = 'restaurant';
       else type = 'mixed';
+      if (i === forcedParkI && j === forcedParkJ) type = 'park';
+      if (i === facilityI && j === facilityJ) type = 'spaceFacility';
 
-      blocks.push({
+      const block = {
         x: cx, z: cz, width, depth,
         size: Math.min(width, depth) - C.sidewalkWidth * 2,
         type,
-      });
+      };
+      blocks.push(block);
+      if (type === 'park' && i === forcedParkI && j === forcedParkJ) spawnParkBlock = block;
+      if (type === 'spaceFacility') spaceFacilityBlock = block;
 
       // Interior area where buildings can live (minus sidewalks)
       const innerW = width - C.sidewalkWidth * 2;
@@ -211,6 +225,8 @@ export function createCity(scene) {
 
       if (type === 'park') {
         addPark(group, cx, cz, innerW, innerD, obstacles, buildingAABBs);
+      } else if (type === 'spaceFacility') {
+        addSpaceFacilityBlock(group, cx, cz, innerW, innerD);
       } else if (type === 'tower') {
         addTower(group, cx, cz, innerW, innerD, getWindowTex, obstacles, buildingAABBs);
       } else if (type === 'restaurant') {
@@ -231,8 +247,8 @@ export function createCity(scene) {
   };
 
   const shops = generateShops(group, blocks);
-  shops.push(addSpaceAgeVisionAttraction(group, spawn));
-  const rocket = addRocketLaunchSite(group, spawn);
+  shops.push(addSpaceAgeVisionAttraction(group, spawnParkBlock, spawn));
+  const rocket = addRocketLaunchSite(group, spaceFacilityBlock, spawn);
 
   // For legacy compatibility (camera raycast, old code paths)
   const avgCell = (sizeX + sizeZ) / (xAxis.length + zAxis.length - 2);
@@ -638,19 +654,25 @@ function makeCrowdPerson(shirtColor, pantsColor, hatColor = null) {
   return g;
 }
 
-function addSpaceAgeVisionAttraction(group, spawn) {
+function addSpaceAgeVisionAttraction(group, parkBlock, spawn) {
   const baseY = CONFIG.city.sidewalkHeight;
-  const signX = spawn.x - 8.5;
-  const signZ = spawn.z - 8.5;
-  const targetX = spawn.x - 3.8;
-  const targetZ = spawn.z - 5.0;
+  const anchor = parkBlock || {
+    x: spawn.x - 8.5,
+    z: spawn.z - 8.5,
+    width: 18,
+    depth: 18,
+  };
+  const targetX = anchor.x;
+  const targetZ = anchor.z - anchor.depth * 0.18;
+  const signX = anchor.x - anchor.width * 0.22;
+  const signZ = anchor.z - anchor.depth * 0.36;
   const yaw = Math.atan2(targetX - signX, targetZ - signZ);
 
   const platform = new THREE.Mesh(
-    new THREE.BoxGeometry(8.5, 0.14, 5.0),
+    new THREE.BoxGeometry(Math.min(10, anchor.width * 0.42), 0.14, Math.min(5.2, anchor.depth * 0.24)),
     new THREE.MeshLambertMaterial({ color: 0x26323a })
   );
-  platform.position.set(signX + 1.0, baseY + 0.02, signZ - 0.6);
+  platform.position.set(targetX, baseY + 0.02, targetZ);
   platform.castShadow = true;
   platform.receiveShadow = true;
   group.add(platform);
@@ -660,14 +682,14 @@ function addSpaceAgeVisionAttraction(group, spawn) {
     side: THREE.DoubleSide,
   });
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(5.4, 1.35), signMat);
-  sign.position.set(signX, baseY + 3.1, signZ);
+  sign.position.set(signX, baseY + 3.25, signZ);
   sign.rotation.y = yaw;
   group.add(sign);
 
   const postMat = new THREE.MeshLambertMaterial({ color: 0x1d2028 });
   for (const sx of [-2.25, 2.25]) {
-    const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, 3.0, 0.18), postMat);
-    post.position.set(signX + Math.cos(yaw) * sx, baseY + 1.55, signZ - Math.sin(yaw) * sx);
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, 3.15, 0.18), postMat);
+    post.position.set(signX + Math.cos(yaw) * sx, baseY + 1.62, signZ - Math.sin(yaw) * sx);
     post.castShadow = true;
     group.add(post);
   }
@@ -676,7 +698,7 @@ function addSpaceAgeVisionAttraction(group, spawn) {
     new THREE.CylinderGeometry(0.42, 0.42, 1.8, 16),
     new THREE.MeshLambertMaterial({ color: 0x76f7ff, emissive: 0x174c55, emissiveIntensity: 0.7 })
   );
-  glow.position.set(signX + 3.2, baseY + 0.95, signZ - 1.4);
+  glow.position.set(targetX + 3.2, baseY + 0.95, targetZ - 1.4);
   glow.castShadow = true;
   group.add(glow);
 
@@ -688,10 +710,10 @@ function addSpaceAgeVisionAttraction(group, spawn) {
     [-3.1, -0.6], [-1.95, -0.85], [-0.8, -0.55], [0.45, -0.95], [1.55, -0.55], [2.65, -0.85],
     [-2.45, 0.65], [-1.2, 0.45], [0.15, 0.55], [1.45, 0.35], [2.55, 0.6],
   ];
-  const crowdMarkers = offsets.map(([ox, oz]) => ({ x: signX + 1.1 + ox, z: signZ - 0.9 + oz }));
+  const crowdMarkers = offsets.map(([ox, oz]) => ({ x: targetX + ox, z: targetZ + oz }));
   offsets.forEach(([ox, oz], i) => {
     const person = makeCrowdPerson(colors[i % colors.length], 0x202028 + (i % 3) * 0x101010, i % 4 === 0 ? 0x76f7ff : null);
-    person.position.set(signX + 1.1 + ox, baseY + 0.08, signZ - 0.9 + oz);
+    person.position.set(targetX + ox, baseY + 0.08, targetZ + oz);
     person.rotation.y = Math.atan2(signX - person.position.x, signZ - person.position.z);
     person.scale.setScalar(1.25);
     crowdGroup.add(person);
@@ -704,7 +726,7 @@ function addSpaceAgeVisionAttraction(group, spawn) {
     signColor: 0x1f7a8c,
     facingYaw: yaw,
     ownerPos: { x: targetX, z: targetZ },
-    signPos: { x: signX, y: baseY + 3.1, z: signZ },
+    signPos: { x: signX, y: baseY + 3.25, z: signZ },
     prompt: 'Press E for Space Age Vision info',
     siteUrl: 'https://spaceagevision.world',
     siteLabel: 'spaceagevision.world',
@@ -715,10 +737,57 @@ function addSpaceAgeVisionAttraction(group, spawn) {
   };
 }
 
-function addRocketLaunchSite(group, spawn) {
+function addSpaceFacilityBlock(group, cx, cz, w, d) {
   const baseY = CONFIG.city.sidewalkHeight;
-  const x = spawn.x + 8.5;
-  const z = spawn.z - 11.0;
+  const slab = new THREE.Mesh(
+    new THREE.BoxGeometry(w * 0.94, 0.16, d * 0.94),
+    new THREE.MeshLambertMaterial({ color: 0x3d444a })
+  );
+  slab.position.set(cx, baseY + 0.035, cz);
+  slab.castShadow = true;
+  slab.receiveShadow = true;
+  group.add(slab);
+
+  const stripeMat = new THREE.MeshLambertMaterial({ color: 0xf0d36a });
+  for (const side of [-1, 1]) {
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(w * 0.72, 0.05, 0.18), stripeMat);
+    stripe.position.set(cx, baseY + 0.14, cz + side * d * 0.34);
+    group.add(stripe);
+  }
+
+  const buildingMat = new THREE.MeshLambertMaterial({ color: 0x7d8d96 });
+  const roofMat = new THREE.MeshLambertMaterial({ color: 0x2f3a44 });
+  const hangar = new THREE.Mesh(new THREE.BoxGeometry(w * 0.34, 3.0, d * 0.22), buildingMat);
+  hangar.position.set(cx - w * 0.25, baseY + 1.55, cz + d * 0.22);
+  hangar.castShadow = true;
+  hangar.receiveShadow = true;
+  group.add(hangar);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(w * 0.36, 0.35, d * 0.24), roofMat);
+  roof.position.set(hangar.position.x, baseY + 3.25, hangar.position.z);
+  roof.castShadow = true;
+  group.add(roof);
+
+  const dish = new THREE.Mesh(
+    new THREE.SphereGeometry(0.9, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+    new THREE.MeshLambertMaterial({ color: 0xb9c2c8 })
+  );
+  dish.position.set(cx + w * 0.28, baseY + 1.7, cz + d * 0.25);
+  dish.rotation.x = -Math.PI * 0.25;
+  dish.castShadow = true;
+  group.add(dish);
+
+  const antenna = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.08, 0.1, 4.0, 8),
+    new THREE.MeshLambertMaterial({ color: 0xb9c2c8 })
+  );
+  antenna.position.set(cx + w * 0.37, baseY + 2.0, cz - d * 0.28);
+  group.add(antenna);
+}
+
+function addRocketLaunchSite(group, facilityBlock, spawn) {
+  const baseY = CONFIG.city.sidewalkHeight;
+  const x = facilityBlock ? facilityBlock.x : spawn.x + 8.5;
+  const z = facilityBlock ? facilityBlock.z - facilityBlock.depth * 0.12 : spawn.z - 11.0;
   const siteGroup = new THREE.Group();
   siteGroup.name = 'rocket-launch-site';
   siteGroup.position.set(x, baseY, z);
@@ -847,7 +916,7 @@ function generateShops(group, blocks) {
   const sw = CONFIG.city.sidewalkWidth;
 
   // Prefer non-park blocks for shop signs
-  const candidateBlocks = blocks.filter(b => b.type !== 'park');
+  const candidateBlocks = blocks.filter(b => b.type !== 'park' && b.type !== 'spaceFacility');
 
   const usedBlock = new Set();
   let i = 0;
