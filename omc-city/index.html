@@ -238,6 +238,67 @@
       font-size: 12px;
       opacity: 0.7;
     }
+    #dialog-sale-hint {
+      display: none;
+      margin-top: 8px;
+      font-size: 13px;
+      color: #7ee2a6;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+    #sale-iframe-wrap {
+      display: none;
+      position: fixed;
+      bottom: 70px;
+      left: calc(50% + min(320px, 42vw));
+      width: min(420px, 36vw);
+      height: min(560px, 70vh);
+      background: rgba(20,24,32,0.95);
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      overflow: hidden;
+      z-index: 10;
+    }
+    #sale-iframe-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: rgba(0,0,0,0.5);
+      color: #ffd28a;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    #sale-iframe-close {
+      cursor: pointer;
+      background: transparent;
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.4);
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 12px;
+    }
+    #sale-iframe {
+      width: 100%;
+      height: calc(100% - 36px);
+      border: 0;
+      background: #fff;
+    }
+    #minimap {
+      position: fixed;
+      bottom: 46px;
+      left: 18px;
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.4);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+      overflow: hidden;
+      pointer-events: none;
+      user-select: none;
+    }
   </style>
   <script type="importmap">
     {
@@ -266,8 +327,17 @@
   <div id="dialog">
     <div id="dialog-name"></div>
     <div id="dialog-text"></div>
+    <div id="dialog-sale-hint">Press F to view on WhatsLocal</div>
     <div id="dialog-close">Press E or ESC to close</div>
   </div>
+  <div id="sale-iframe-wrap">
+    <div id="sale-iframe-header">
+      <span id="sale-iframe-title">Sale</span>
+      <button id="sale-iframe-close" type="button">Close</button>
+    </div>
+    <iframe id="sale-iframe" src="about:blank" title="Sale"></iframe>
+  </div>
+  <canvas id="minimap" width="160" height="160"></canvas>
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>

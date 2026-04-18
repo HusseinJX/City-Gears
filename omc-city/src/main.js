@@ -93,6 +93,100 @@ function init() {
 
   attachAudioUnlock(canvas);
 
+  const minimapCanvas = document.getElementById('minimap');
+  const mmCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
+  const MM_SIZE = 160;
+  const MM_R = MM_SIZE / 2;
+  const MM_WORLD_RANGE = Math.max(90, Math.min(180, (cityInfo.totalSize || 300) * 0.35));
+
+  function worldToMM(wx, wz, cx, cz) {
+    return {
+      sx: MM_R + (wx - cx) * (MM_R / MM_WORLD_RANGE),
+      sy: MM_R + (wz - cz) * (MM_R / MM_WORLD_RANGE),
+    };
+  }
+
+  function drawMinimap(playerX, playerZ, playerYaw) {
+    if (!mmCtx) return;
+    mmCtx.clearRect(0, 0, MM_SIZE, MM_SIZE);
+
+    mmCtx.save();
+    mmCtx.beginPath();
+    mmCtx.arc(MM_R, MM_R, MM_R, 0, Math.PI * 2);
+    mmCtx.clip();
+
+    mmCtx.fillStyle = '#1e2028';
+    mmCtx.fillRect(0, 0, MM_SIZE, MM_SIZE);
+
+    const xAxis = cityInfo.xAxis || [];
+    const zAxis = cityInfo.zAxis || [];
+    const minX = xAxis.length ? xAxis[0] - CONFIG.city.roadWidth : -cityInfo.totalSize / 2;
+    const maxX = xAxis.length ? xAxis[xAxis.length - 1] + CONFIG.city.roadWidth : cityInfo.totalSize / 2;
+    const minZ = zAxis.length ? zAxis[0] - CONFIG.city.roadWidth : -cityInfo.totalSize / 2;
+    const maxZ = zAxis.length ? zAxis[zAxis.length - 1] + CONFIG.city.roadWidth : cityInfo.totalSize / 2;
+
+    mmCtx.strokeStyle = 'rgba(190,205,220,0.55)';
+    mmCtx.lineWidth = 2;
+    for (const z of zAxis) {
+      const a = worldToMM(minX, z, playerX, playerZ);
+      const b = worldToMM(maxX, z, playerX, playerZ);
+      mmCtx.beginPath();
+      mmCtx.moveTo(a.sx, a.sy);
+      mmCtx.lineTo(b.sx, b.sy);
+      mmCtx.stroke();
+    }
+    for (const x of xAxis) {
+      const a = worldToMM(x, minZ, playerX, playerZ);
+      const b = worldToMM(x, maxZ, playerX, playerZ);
+      mmCtx.beginPath();
+      mmCtx.moveTo(a.sx, a.sy);
+      mmCtx.lineTo(b.sx, b.sy);
+      mmCtx.stroke();
+    }
+
+    for (const shop of cityInfo.shops || []) {
+      const { sx, sy } = worldToMM(shop.ownerPos.x, shop.ownerPos.z, playerX, playerZ);
+      if (sx < 0 || sx > MM_SIZE || sy < 0 || sy > MM_SIZE) continue;
+      mmCtx.beginPath();
+      mmCtx.arc(sx, sy, 3.5, 0, Math.PI * 2);
+      mmCtx.fillStyle = '#ffd28a';
+      mmCtx.fill();
+    }
+
+    for (const v of vehicles) {
+      const { sx, sy } = worldToMM(v.group.position.x, v.group.position.z, playerX, playerZ);
+      if (sx < 0 || sx > MM_SIZE || sy < 0 || sy > MM_SIZE) continue;
+      mmCtx.beginPath();
+      mmCtx.arc(sx, sy, 3, 0, Math.PI * 2);
+      mmCtx.fillStyle = v.kind === 'car' ? '#76a7ff' : '#ff6b6b';
+      mmCtx.fill();
+    }
+
+    mmCtx.save();
+    mmCtx.translate(MM_R, MM_R);
+    mmCtx.rotate(-playerYaw);
+    mmCtx.beginPath();
+    mmCtx.moveTo(0, -8);
+    mmCtx.lineTo(6, 6);
+    mmCtx.lineTo(0, 3);
+    mmCtx.lineTo(-6, 6);
+    mmCtx.closePath();
+    mmCtx.fillStyle = '#4af0a0';
+    mmCtx.fill();
+    mmCtx.strokeStyle = '#fff';
+    mmCtx.lineWidth = 1.5;
+    mmCtx.stroke();
+    mmCtx.restore();
+
+    mmCtx.restore();
+
+    mmCtx.beginPath();
+    mmCtx.arc(MM_R, MM_R, MM_R - 1, 0, Math.PI * 2);
+    mmCtx.strokeStyle = 'rgba(255,255,255,0.3)';
+    mmCtx.lineWidth = 1.5;
+    mmCtx.stroke();
+  }
+
   const hudFps = document.getElementById('hud-fps');
   const hudPos = document.getElementById('hud-pos');
   const hudPrompt = document.getElementById('hud-prompt');
@@ -109,11 +203,30 @@ function init() {
   const dialogBox = document.getElementById('dialog');
   const dialogName = document.getElementById('dialog-name');
   const dialogText = document.getElementById('dialog-text');
+  const dialogSaleHint = document.getElementById('dialog-sale-hint');
+  const saleIframeWrap = document.getElementById('sale-iframe-wrap');
+  const saleIframe = document.getElementById('sale-iframe');
+  const saleIframeClose = document.getElementById('sale-iframe-close');
+  const saleIframeTitle = document.getElementById('sale-iframe-title');
+  const SALE_URL = 'http://localhost:8788/business/132';
 
   let currentNearShop = null;
   let dialogOpen = false;
+  let saleAvailable = false;
   let playerMode = 'walk'; // 'walk' | 'drive'
   let currentVehicle = null;
+
+  function closeSaleIframe() {
+    if (saleIframeWrap) saleIframeWrap.style.display = 'none';
+    if (saleIframe) saleIframe.src = 'about:blank';
+  }
+  function openSaleIframe(shopName) {
+    if (!saleIframeWrap || !saleIframe) return;
+    if (saleIframeTitle) saleIframeTitle.textContent = `${shopName} Sale`;
+    saleIframe.src = SALE_URL;
+    saleIframeWrap.style.display = 'block';
+  }
+  if (saleIframeClose) saleIframeClose.addEventListener('click', closeSaleIframe);
 
   function openDialog(shop) {
     if (!shop || dialogOpen) return;
@@ -121,11 +234,16 @@ function init() {
     if (dialogName) dialogName.textContent = shop.name;
     if (dialogText) dialogText.textContent = `"${shop.dialog}"`;
     if (dialogBox) dialogBox.style.display = 'block';
+    saleAvailable = true;
+    if (dialogSaleHint) dialogSaleHint.style.display = 'block';
     playDialogOpen();
   }
   function closeDialog() {
     dialogOpen = false;
+    saleAvailable = false;
     if (dialogBox) dialogBox.style.display = 'none';
+    if (dialogSaleHint) dialogSaleHint.style.display = 'none';
+    closeSaleIframe();
   }
 
   function distSq(ax, az, bx, bz) {
@@ -204,6 +322,9 @@ function init() {
 
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Escape' && dialogOpen) closeDialog();
+    if (e.code === 'KeyF' && dialogOpen && saleAvailable && !e.repeat) {
+      openSaleIframe(dialogName ? dialogName.textContent : 'Shop');
+    }
     if (playerMode === 'drive' && currentVehicle && !e.repeat) {
       const map = { Digit1: 1, Digit2: 2, Digit3: 3, Digit4: 4, Digit5: 5, Digit6: 6, Digit7: 7 };
       const g = map[e.code];
@@ -334,6 +455,11 @@ function init() {
     }
 
     renderer.render(scene, cameraRig.camera);
+    drawMinimap(
+      character.group.position.x,
+      character.group.position.z,
+      playerMode === 'drive' && currentVehicle ? currentVehicle.state.yaw : character.group.rotation.y
+    );
 
     fpsAccumTime += dt;
     fpsAccumFrames += 1;
