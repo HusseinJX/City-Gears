@@ -115,7 +115,7 @@ export function createDrive({ group, state, cfg, isBlocked, onVisualTick }) {
           if (state.speed > 0.15) {
             state.speed -= cfg.brakeAccel * -input.forward * dt;
             if (state.speed < 0) state.speed = 0;
-          } else {
+          } else if (input.allowAutoReverse !== false) {
             state.speed -= cfg.autoReverseAccel * -input.forward * dt;
             if (state.speed < -cfg.autoReverseMaxSpeed) state.speed = -cfg.autoReverseMaxSpeed;
           }

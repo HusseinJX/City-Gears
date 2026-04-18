@@ -499,6 +499,7 @@ function init() {
     } else if (playerMode === 'drive' && currentVehicle) {
       const v = currentVehicle;
       const input = controller.getInput();
+      input.allowAutoReverse = automaticTransmission;
       if (automaticTransmission && v.state.gear === 7 && input.forward > 0) {
         setVehicleGear(v, 1);
       }
