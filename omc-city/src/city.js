@@ -719,9 +719,13 @@ function addRocketLaunchSite(group, spawn) {
   const baseY = CONFIG.city.sidewalkHeight;
   const x = spawn.x + 8.5;
   const z = spawn.z - 11.0;
-  const rocketGroup = new THREE.Group();
-  rocketGroup.name = 'launch-rocket';
-  rocketGroup.position.set(x, baseY, z);
+  const siteGroup = new THREE.Group();
+  siteGroup.name = 'rocket-launch-site';
+  siteGroup.position.set(x, baseY, z);
+
+  const rocket = new THREE.Group();
+  rocket.name = 'launch-rocket';
+  siteGroup.add(rocket);
 
   const pad = new THREE.Mesh(
     new THREE.CylinderGeometry(3.0, 3.4, 0.35, 24),
@@ -730,7 +734,7 @@ function addRocketLaunchSite(group, spawn) {
   pad.position.y = 0.18;
   pad.castShadow = true;
   pad.receiveShadow = true;
-  rocketGroup.add(pad);
+  siteGroup.add(pad);
 
   const bodyMat = new THREE.MeshLambertMaterial({ color: 0xf3f5f7 });
   const stripeMat = new THREE.MeshLambertMaterial({ color: 0xe64242 });
@@ -739,21 +743,21 @@ function addRocketLaunchSite(group, spawn) {
   const body = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.72, 4.6, 24), bodyMat);
   body.position.y = 2.85;
   body.castShadow = true;
-  rocketGroup.add(body);
+  rocket.add(body);
 
   const nose = new THREE.Mesh(new THREE.ConeGeometry(0.64, 1.25, 24), stripeMat);
   nose.position.y = 5.78;
   nose.castShadow = true;
-  rocketGroup.add(nose);
+  rocket.add(nose);
 
   const window = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 10), glassMat);
   window.scale.z = 0.18;
   window.position.set(0, 3.65, -0.64);
-  rocketGroup.add(window);
+  rocket.add(window);
 
   const stripe = new THREE.Mesh(new THREE.CylinderGeometry(0.635, 0.735, 0.34, 24), stripeMat);
   stripe.position.y = 2.05;
-  rocketGroup.add(stripe);
+  rocket.add(stripe);
 
   const finMat = new THREE.MeshLambertMaterial({ color: 0xd72e2e });
   for (let i = 0; i < 3; i++) {
@@ -762,7 +766,7 @@ function addRocketLaunchSite(group, spawn) {
     fin.position.set(Math.sin(angle) * 0.78, 1.05, Math.cos(angle) * 0.78);
     fin.rotation.y = angle;
     fin.castShadow = true;
-    rocketGroup.add(fin);
+    rocket.add(fin);
   }
 
   const flame = new THREE.Mesh(
@@ -772,7 +776,7 @@ function addRocketLaunchSite(group, spawn) {
   flame.name = 'rocket-flame';
   flame.position.y = 0.25;
   flame.rotation.x = Math.PI;
-  rocketGroup.add(flame);
+  rocket.add(flame);
 
   const gantry = new THREE.Group();
   const gantryMat = new THREE.MeshLambertMaterial({ color: 0x313943 });
@@ -788,12 +792,13 @@ function addRocketLaunchSite(group, spawn) {
     rail.castShadow = true;
     gantry.add(rail);
   }
-  rocketGroup.add(gantry);
+  siteGroup.add(gantry);
 
-  group.add(rocketGroup);
+  group.add(siteGroup);
 
   return {
-    group: rocketGroup,
+    group: siteGroup,
+    rocket,
     flame,
     x,
     z,
