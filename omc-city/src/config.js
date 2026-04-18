@@ -1,3 +1,7 @@
+// Set this locally with:
+// localStorage.setItem('CITY_GEARS_MAPBOX_TOKEN', 'your-mapbox-token')
+export const MAPBOX_TOKEN = globalThis.localStorage?.getItem('CITY_GEARS_MAPBOX_TOKEN') ?? '';
+
 // Tunable constants for the City Walk game.
 // All distances in world units, times in seconds, angles in radians.
 
