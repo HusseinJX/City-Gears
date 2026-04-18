@@ -256,6 +256,8 @@ function init() {
   let rocketRedirected = false;
   const rocketBaseY = cityInfo.rocket ? cityInfo.rocket.group.position.y : 0;
   const rocketCameraTarget = new THREE.Object3D();
+  const rocketWorldPos = new THREE.Vector3();
+  const rocketLookTarget = new THREE.Vector3();
 
   function closeSaleIframe() {
     if (saleIframeWrap) saleIframeWrap.style.display = 'none';
@@ -476,16 +478,28 @@ function init() {
           cityInfo.rocket.rocket.rotation.z = Math.sin(t * 9) * 0.018;
         }
         if (cityInfo.rocket.flame?.material) {
-          cityInfo.rocket.flame.material.opacity = Math.min(1, 0.2 + t * 0.45);
-          cityInfo.rocket.flame.scale.setScalar(1.15 + Math.sin(t * 28) * 0.22 + Math.min(2.4, t * 0.45));
+          cityInfo.rocket.flame.material.opacity = Math.min(1, 0.45 + t * 0.55);
+          cityInfo.rocket.flame.scale.set(1.2 + Math.sin(t * 28) * 0.18, 1.15 + Math.min(3.0, t * 0.55), 1.2);
         }
-        cameraRig.state.yaw += dt * 0.16;
-        cameraRig.state.pitch = Math.max(-0.95, cameraRig.state.pitch - dt * 0.055);
+        if (cityInfo.rocket.plume?.material) {
+          cityInfo.rocket.plume.material.opacity = Math.max(0.15, Math.min(0.86, 0.35 + t * 0.18));
+          cityInfo.rocket.plume.scale.set(1.0 + t * 0.12, 1.0 + Math.min(3.0, t * 0.42), 1.0 + t * 0.12);
+        }
+        if (cityInfo.rocket.smokePuffs) {
+          for (let i = 0; i < cityInfo.rocket.smokePuffs.length; i++) {
+            const puff = cityInfo.rocket.smokePuffs[i];
+            const spread = Math.min(4.2, 0.45 + t * 1.05 + (i % 3) * 0.28);
+            const lift = Math.min(1.5, t * 0.18 + (i % 2) * 0.18);
+            puff.scale.set(spread, spread * 0.62, spread);
+            puff.position.y = 0.65 + lift;
+            puff.material.opacity = Math.max(0, Math.min(0.7, 0.18 + t * 0.16 - Math.max(0, t - 4.2) * 0.18));
+          }
+        }
         if (launchFade) {
-          const fade = Math.max(0, Math.min(1, (t - 4.0) / 2.0));
+          const fade = Math.max(0, Math.min(1, (t - 6.2) / 2.1));
           launchFade.style.opacity = String(fade);
         }
-        if (t > 6.4 && !rocketRedirected) {
+        if (t > 8.8 && !rocketRedirected) {
           rocketRedirected = true;
           window.location.href = cityInfo.rocket.launchUrl || SPACE_GAME_URL;
         }
@@ -502,6 +516,23 @@ function init() {
       playerMode === 'rocket' && cityInfo.rocket ? rocketCameraTarget : character.group,
       playerMode === 'rocket' ? [] : cityInfo.obstacles
     );
+    if (playerMode === 'rocket' && cityInfo.rocket) {
+      const t = rocketState === 'launching' ? (performance.now() - rocketLaunchStartedAt) / 1000 : 0;
+      cityInfo.rocket.rocket?.getWorldPosition(rocketWorldPos);
+      const pullback = Math.min(30, t * 4.8);
+      const lift = Math.min(18, t * 2.4);
+      cameraRig.camera.position.set(
+        cityInfo.rocket.x - 18 - pullback,
+        rocketBaseY + 5 + lift,
+        cityInfo.rocket.z + 30 + pullback * 0.55
+      );
+      rocketLookTarget.set(
+        rocketWorldPos.x,
+        rocketWorldPos.y + 2 + Math.min(16, t * 2.4),
+        rocketWorldPos.z
+      );
+      cameraRig.camera.lookAt(rocketLookTarget);
+    }
 
     let nearShop = null;
     let nearRocket = false;

@@ -740,43 +740,74 @@ function addRocketLaunchSite(group, spawn) {
   const stripeMat = new THREE.MeshLambertMaterial({ color: 0xe64242 });
   const glassMat = new THREE.MeshLambertMaterial({ color: 0x76d8ff, emissive: 0x123845, emissiveIntensity: 0.45 });
 
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.72, 4.6, 24), bodyMat);
-  body.position.y = 2.85;
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.82, 0.92, 6.0, 28), bodyMat);
+  body.position.y = 3.65;
   body.castShadow = true;
   rocket.add(body);
 
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.64, 1.25, 24), stripeMat);
-  nose.position.y = 5.78;
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.84, 1.7, 28), stripeMat);
+  nose.position.y = 7.5;
   nose.castShadow = true;
   rocket.add(nose);
 
-  const window = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 10), glassMat);
+  const window = new THREE.Mesh(new THREE.SphereGeometry(0.36, 16, 10), glassMat);
   window.scale.z = 0.18;
-  window.position.set(0, 3.65, -0.64);
+  window.position.set(0, 4.55, -0.86);
   rocket.add(window);
 
-  const stripe = new THREE.Mesh(new THREE.CylinderGeometry(0.635, 0.735, 0.34, 24), stripeMat);
-  stripe.position.y = 2.05;
+  const stripe = new THREE.Mesh(new THREE.CylinderGeometry(0.84, 0.94, 0.46, 28), stripeMat);
+  stripe.position.y = 2.45;
   rocket.add(stripe);
 
   const finMat = new THREE.MeshLambertMaterial({ color: 0xd72e2e });
   for (let i = 0; i < 3; i++) {
     const angle = i * Math.PI * 2 / 3;
-    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.05, 0.9), finMat);
-    fin.position.set(Math.sin(angle) * 0.78, 1.05, Math.cos(angle) * 0.78);
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.24, 1.45, 1.2), finMat);
+    fin.position.set(Math.sin(angle) * 1.0, 1.25, Math.cos(angle) * 1.0);
     fin.rotation.y = angle;
     fin.castShadow = true;
     rocket.add(fin);
   }
 
   const flame = new THREE.Mesh(
-    new THREE.ConeGeometry(0.42, 1.25, 18),
-    new THREE.MeshBasicMaterial({ color: 0xffb02e, transparent: true, opacity: 0 })
+    new THREE.ConeGeometry(0.75, 3.4, 24),
+    new THREE.MeshBasicMaterial({ color: 0xfff0a0, transparent: true, opacity: 0, depthWrite: false })
   );
   flame.name = 'rocket-flame';
-  flame.position.y = 0.25;
+  flame.position.y = -0.65;
   flame.rotation.x = Math.PI;
   rocket.add(flame);
+
+  const plume = new THREE.Mesh(
+    new THREE.ConeGeometry(1.35, 7.0, 28),
+    new THREE.MeshBasicMaterial({ color: 0xff8a24, transparent: true, opacity: 0, depthWrite: false })
+  );
+  plume.name = 'rocket-plume';
+  plume.position.y = -2.8;
+  plume.rotation.x = Math.PI;
+  rocket.add(plume);
+
+  const smokeGroup = new THREE.Group();
+  smokeGroup.name = 'rocket-smoke-cloud';
+  const smokeMat = new THREE.MeshLambertMaterial({ color: 0xc8c6bc, transparent: true, opacity: 0 });
+  const smokePuffs = [];
+  const puffOffsets = [
+    [-2.7, 0, -0.6], [-1.7, 0, -2.1], [0.2, 0, -2.6], [2.0, 0, -1.9], [2.8, 0, 0.2],
+    [1.6, 0, 1.9], [-0.5, 0, 2.5], [-2.4, 0, 1.5], [-3.2, 0, 0.6], [0.4, 0, 0.4],
+  ];
+  puffOffsets.forEach(([px, py, pz], i) => {
+    const puff = new THREE.Mesh(
+      new THREE.SphereGeometry(0.75 + (i % 3) * 0.2, 16, 10),
+      smokeMat.clone()
+    );
+    puff.position.set(px, 0.65 + py + (i % 2) * 0.25, pz);
+    puff.scale.set(0.2, 0.16, 0.2);
+    puff.castShadow = false;
+    puff.receiveShadow = false;
+    smokeGroup.add(puff);
+    smokePuffs.push(puff);
+  });
+  siteGroup.add(smokeGroup);
 
   const gantry = new THREE.Group();
   const gantryMat = new THREE.MeshLambertMaterial({ color: 0x313943 });
@@ -800,6 +831,8 @@ function addRocketLaunchSite(group, spawn) {
     group: siteGroup,
     rocket,
     flame,
+    plume,
+    smokePuffs,
     x,
     z,
     radius: 5.8,
