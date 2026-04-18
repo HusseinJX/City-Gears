@@ -271,6 +271,7 @@ function init() {
   let currentSiteTitle = 'Sale';
   let playerMode = 'walk'; // 'walk' | 'drive'
   let currentVehicle = null;
+  let automaticTransmission = true;
   let currentNearRocket = false;
   let rocketState = 'idle'; // 'idle' | 'entered' | 'launching'
   let rocketLaunchStartedAt = 0;
@@ -324,6 +325,38 @@ function init() {
     return dx * dx + dz * dz;
   }
 
+  function setVehicleGear(v, gear, playSound = true) {
+    if (!v || v.state.gear === gear) return false;
+    v.setGear(gear);
+    if (playSound) playGearShift();
+    return true;
+  }
+
+  function updateAutomaticTransmission(v, input) {
+    if (!v || !automaticTransmission || v.state.stalled) return;
+    const gear = v.state.gear;
+    const speedAbs = Math.abs(v.state.speed);
+
+    if (gear === 7) {
+      if (input.forward > 0) setVehicleGear(v, 1);
+      return;
+    }
+    if (input.forward < 0 && speedAbs < 0.35) {
+      setVehicleGear(v, 7);
+      return;
+    }
+    if (input.forward <= 0) return;
+
+    const rpm = v.state.rpm;
+    const upshiftRpm = Math.min(v.cfg.shiftLightRpm, v.cfg.redlineRpm * 0.9);
+    const downshiftRpm = Math.max(v.cfg.lugWarnRpm * 1.15, v.cfg.idleRpm * 2.1);
+    if (rpm >= upshiftRpm && gear < 6) {
+      setVehicleGear(v, gear + 1);
+    } else if (rpm < downshiftRpm && gear > 1) {
+      setVehicleGear(v, gear - 1);
+    }
+  }
+
   // Returns the nearest vehicle whose mount radius contains the character, or null.
   function nearestMountableVehicle() {
     let best = null;
@@ -346,6 +379,7 @@ function init() {
   function mountVehicle(v) {
     playerMode = 'drive';
     currentVehicle = v;
+    automaticTransmission = true;
     v.state.yaw = v.group.rotation.y;
     v.state.steer = 0;
     v.setGear(1);
@@ -435,13 +469,21 @@ function init() {
       launchRocket();
     }
     if (playerMode === 'drive' && currentVehicle && !e.repeat) {
+      if (e.code === 'KeyT') {
+        automaticTransmission = !automaticTransmission;
+        return;
+      }
+      if (automaticTransmission && currentVehicle.state.stalled && e.code === 'Digit1') {
+        setVehicleGear(currentVehicle, 1);
+        return;
+      }
+      if (automaticTransmission) return;
       const map = { Digit1: 1, Digit2: 2, Digit3: 3, Digit4: 4, Digit5: 5, Digit6: 6, Digit7: 7 };
       const g = map[e.code];
       if (g != null) {
         const sameGear = g === currentVehicle.state.gear;
         if (!sameGear || (currentVehicle.state.stalled && g === 1)) {
-          currentVehicle.setGear(g);
-          playGearShift();
+          setVehicleGear(currentVehicle, g);
         }
       }
     }
@@ -465,7 +507,11 @@ function init() {
     } else if (playerMode === 'drive' && currentVehicle) {
       const v = currentVehicle;
       const input = controller.getInput();
+      if (automaticTransmission && v.state.gear === 7 && input.forward > 0) {
+        setVehicleGear(v, 1);
+      }
       v.drive(dt, input);
+      updateAutomaticTransmission(v, input);
       character.group.position.x = v.group.position.x;
       character.group.position.z = v.group.position.z;
       character.group.position.y = v.seatHeight;
@@ -582,7 +628,7 @@ function init() {
         promptMsg = 'Launching';
       } else if (playerMode === 'drive') {
         if (performance.now() < dismountHintUntil) {
-          promptMsg = 'Press E to get out';
+          promptMsg = `Press E to get out · T ${automaticTransmission ? 'manual' : 'automatic'}`;
         }
       } else if (nearRocket) {
         promptMsg = 'Press E to enter the rocket';
@@ -603,9 +649,12 @@ function init() {
       if (hudGear) hudGear.style.display = 'block';
       if (hudTach) hudTach.style.display = 'block';
       const g = v.state.gear;
-      const gLabel = g === 7 ? 'R' : String(g);
+      const gLabel = `${automaticTransmission ? 'A' : 'M'}${g === 7 ? 'R' : String(g)}`;
       if (hudGearVal) hudGearVal.textContent = gLabel;
-      if (hudTachGear) hudTachGear.textContent = g === 7 ? 'REVERSE' : `GEAR ${g}`;
+      if (hudTachGear) {
+        const mode = automaticTransmission ? 'AUTO' : 'MANUAL';
+        hudTachGear.textContent = g === 7 ? `${mode} REVERSE` : `${mode} GEAR ${g}`;
+      }
 
       const rpm = v.state.rpm;
       const redline = v.cfg.redlineRpm;
