@@ -191,21 +191,13 @@ function init() {
       }
     }
 
-    mmCtx.save();
-    mmCtx.translate(MM_R, MM_R);
-    mmCtx.rotate(Math.PI - playerYaw);
     mmCtx.beginPath();
-    mmCtx.moveTo(0, -8);
-    mmCtx.lineTo(6, 6);
-    mmCtx.lineTo(0, 3);
-    mmCtx.lineTo(-6, 6);
-    mmCtx.closePath();
+    mmCtx.arc(MM_R, MM_R, 5, 0, Math.PI * 2);
     mmCtx.fillStyle = '#4af0a0';
     mmCtx.fill();
     mmCtx.strokeStyle = '#fff';
     mmCtx.lineWidth = 1.5;
     mmCtx.stroke();
-    mmCtx.restore();
 
     mmCtx.restore();
 
