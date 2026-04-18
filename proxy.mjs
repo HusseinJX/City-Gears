@@ -1,5 +1,5 @@
 // Local proxy: strips headers that prevent whatslocal.ai from rendering
-// inside the in-game vendor iframe. Requests to http://localhost:8788/*
+// inside the in-game vendor iframe. Requests to http://127.0.0.1:8788/*
 // are forwarded to https://app.whatslocal.ai/*.
 import http from 'http';
 import https from 'https';
