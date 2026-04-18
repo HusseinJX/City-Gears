@@ -300,6 +300,22 @@
       pointer-events: none;
       user-select: none;
     }
+    #launch-fade {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      color: #fff;
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.8s linear;
+      z-index: 30;
+    }
     @media (max-width: 720px) {
       #sale-iframe-wrap {
         right: 10px;
@@ -327,7 +343,7 @@
   <div id="hud-title" class="hud">CITY WALK</div>
   <div id="hud-fps" class="hud">FPS: --</div>
   <div id="hud-pos" class="hud">X: 0.0  Z: 0.0</div>
-  <div id="hud-hint" class="hud">WASD move/steer · SHIFT sprint/boost · 1-6 gears · 7 reverse · S auto-brakes & reverses · SPACE jump · E ride / talk · click for mouse-look</div>
+  <div id="hud-hint" class="hud">WASD move/steer · SHIFT sprint/boost · 1-6 gears · 7 reverse · S auto-brakes & reverses · SPACE jump · E ride / talk / enter rocket · L launch · click for mouse-look</div>
   <div id="hud-prompt" class="hud"></div>
   <div id="hud-gear" class="hud"><span class="gear-label">GEAR</span><span id="hud-gear-val">1</span></div>
   <div id="hud-tach">
@@ -352,6 +368,7 @@
     <iframe id="sale-iframe" src="about:blank" title="Sale"></iframe>
   </div>
   <canvas id="minimap" width="160" height="160"></canvas>
+  <div id="launch-fade">ENTERING SPACE</div>
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>

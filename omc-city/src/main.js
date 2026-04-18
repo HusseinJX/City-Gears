@@ -171,6 +171,26 @@ function init() {
       mmCtx.fill();
     }
 
+    if (cityInfo.rocket) {
+      const { sx, sy } = worldToMM(cityInfo.rocket.x, cityInfo.rocket.z, playerX, playerZ);
+      if (sx >= 0 && sx <= MM_SIZE && sy >= 0 && sy <= MM_SIZE) {
+        mmCtx.save();
+        mmCtx.translate(sx, sy);
+        mmCtx.beginPath();
+        mmCtx.moveTo(0, -7);
+        mmCtx.lineTo(5, 5);
+        mmCtx.lineTo(0, 2);
+        mmCtx.lineTo(-5, 5);
+        mmCtx.closePath();
+        mmCtx.fillStyle = '#ff5b45';
+        mmCtx.fill();
+        mmCtx.strokeStyle = '#ffd28a';
+        mmCtx.lineWidth = 1.5;
+        mmCtx.stroke();
+        mmCtx.restore();
+      }
+    }
+
     mmCtx.save();
     mmCtx.translate(MM_R, MM_R);
     mmCtx.rotate(Math.PI - playerYaw);
@@ -217,8 +237,10 @@ function init() {
   const saleIframe = document.getElementById('sale-iframe');
   const saleIframeClose = document.getElementById('sale-iframe-close');
   const saleIframeTitle = document.getElementById('sale-iframe-title');
+  const launchFade = document.getElementById('launch-fade');
   const DEFAULT_SITE_URL = 'http://127.0.0.1:8788/business/132';
   const DEFAULT_SITE_LABEL = 'WhatsLocal';
+  const SPACE_GAME_URL = 'https://expanse-runner-3d-spacegame.netlify.app';
 
   let currentNearShop = null;
   let dialogOpen = false;
@@ -228,6 +250,11 @@ function init() {
   let currentSiteTitle = 'Sale';
   let playerMode = 'walk'; // 'walk' | 'drive'
   let currentVehicle = null;
+  let currentNearRocket = false;
+  let rocketState = 'idle'; // 'idle' | 'entered' | 'launching'
+  let rocketLaunchStartedAt = 0;
+  let rocketRedirected = false;
+  const rocketBaseY = cityInfo.rocket ? cityInfo.rocket.group.position.y : 0;
 
   function closeSaleIframe() {
     if (saleIframeWrap) saleIframeWrap.style.display = 'none';
@@ -325,8 +352,36 @@ function init() {
     currentVehicle = null;
   }
 
+  function enterRocket() {
+    if (!cityInfo.rocket || rocketState !== 'idle') return;
+    closeDialog();
+    closeSaleIframe();
+    playerMode = 'rocket';
+    rocketState = 'entered';
+    character.group.visible = false;
+    character.setPose('sit');
+    character.group.position.set(cityInfo.rocket.x, rocketBaseY + 1.8, cityInfo.rocket.z);
+    cameraRig.state.yaw = Math.PI * 0.75;
+  }
+
+  function launchRocket() {
+    if (!cityInfo.rocket || rocketState !== 'entered') return;
+    rocketState = 'launching';
+    rocketLaunchStartedAt = performance.now();
+    rocketRedirected = false;
+    if (launchFade) {
+      launchFade.style.display = 'flex';
+      launchFade.style.opacity = '0';
+    }
+  }
+
   controller.onInteract(() => {
     if (dialogOpen) { closeDialog(); return; }
+
+    if (currentNearRocket && rocketState === 'idle') {
+      enterRocket();
+      return;
+    }
 
     if (playerMode === 'drive') {
       dismountVehicle();
@@ -347,6 +402,10 @@ function init() {
     if (e.code === 'KeyF' && dialogOpen && saleAvailable && !e.repeat) {
       e.preventDefault();
       openSaleIframe(dialogName ? dialogName.textContent : 'Shop');
+    }
+    if (e.code === 'KeyL' && rocketState === 'entered' && !e.repeat) {
+      e.preventDefault();
+      launchRocket();
     }
     if (playerMode === 'drive' && currentVehicle && !e.repeat) {
       const map = { Digit1: 1, Digit2: 2, Digit3: 3, Digit4: 4, Digit5: 5, Digit6: 6, Digit7: 7 };
@@ -373,10 +432,10 @@ function init() {
   function frame() {
     const dt = Math.min(clock.getDelta(), 0.05);
 
-    if (playerMode === 'walk' || !currentVehicle) {
+    if (playerMode === 'walk') {
       controller.update(dt, character.group);
       character.update(dt, controller.state.distanceWalked, controller.state.isMoving);
-    } else {
+    } else if (playerMode === 'drive' && currentVehicle) {
       const v = currentVehicle;
       const input = controller.getInput();
       v.drive(dt, input);
@@ -398,15 +457,47 @@ function init() {
         ? 0
         : Math.max(0, Math.min(1, (rpm - idle) / (redline - idle)));
       setEngineThrottle(rpmFrac);
+    } else if (playerMode === 'rocket' && cityInfo.rocket) {
+      character.group.position.set(
+        cityInfo.rocket.group.position.x,
+        cityInfo.rocket.group.position.y + 1.8,
+        cityInfo.rocket.group.position.z
+      );
+      if (rocketState === 'launching') {
+        const t = (performance.now() - rocketLaunchStartedAt) / 1000;
+        const rise = 3 + t * 12 + t * t * 10;
+        cityInfo.rocket.group.position.y = rocketBaseY + rise;
+        cityInfo.rocket.group.rotation.z = Math.sin(t * 9) * 0.025;
+        if (cityInfo.rocket.flame?.material) {
+          cityInfo.rocket.flame.material.opacity = Math.min(1, 0.35 + t * 0.25);
+          cityInfo.rocket.flame.scale.setScalar(1 + Math.sin(t * 24) * 0.18 + t * 0.12);
+        }
+        if (launchFade) {
+          const fade = Math.max(0, Math.min(1, (t - 3.0) / 1.7));
+          launchFade.style.opacity = String(fade);
+        }
+        if (t > 5.1 && !rocketRedirected) {
+          rocketRedirected = true;
+          window.location.href = cityInfo.rocket.launchUrl || SPACE_GAME_URL;
+        }
+      }
     }
 
     npcs.update(dt);
-    cameraRig.update(dt, character.group, cityInfo.obstacles);
+    cameraRig.update(
+      dt,
+      playerMode === 'rocket' && cityInfo.rocket ? cityInfo.rocket.group : character.group,
+      cityInfo.obstacles
+    );
 
     let nearShop = null;
+    let nearRocket = false;
     if (playerMode === 'walk' && !dialogOpen) {
       const px = character.group.position.x;
       const pz = character.group.position.z;
+      if (cityInfo.rocket) {
+        nearRocket = distSq(px, pz, cityInfo.rocket.x, cityInfo.rocket.z) < cityInfo.rocket.radius * cityInfo.rocket.radius;
+      }
       let bestSq = Infinity;
       for (const shop of cityInfo.shops) {
         const dx = shop.ownerPos.x - px;
@@ -416,13 +507,20 @@ function init() {
         if (dsq < radius * radius && dsq < bestSq) { bestSq = dsq; nearShop = shop; }
       }
     }
+    currentNearRocket = nearRocket;
 
     let promptMsg = null;
     if (!dialogOpen) {
-      if (playerMode === 'drive') {
+      if (rocketState === 'entered') {
+        promptMsg = 'Press L to launch';
+      } else if (rocketState === 'launching') {
+        promptMsg = 'Launching';
+      } else if (playerMode === 'drive') {
         if (performance.now() < dismountHintUntil) {
           promptMsg = 'Press E to get out';
         }
+      } else if (nearRocket) {
+        promptMsg = 'Press E to enter the rocket';
       } else if (nearShop) {
         promptMsg = nearShop.prompt || `Press E to talk to ${nearShop.name}`;
       } else {

@@ -232,6 +232,7 @@ export function createCity(scene) {
 
   const shops = generateShops(group, blocks);
   shops.push(addSpaceAgeVisionAttraction(group, spawn));
+  const rocket = addRocketLaunchSite(group, spawn);
 
   // For legacy compatibility (camera raycast, old code paths)
   const avgCell = (sizeX + sizeZ) / (xAxis.length + zAxis.length - 2);
@@ -240,7 +241,7 @@ export function createCity(scene) {
     group, obstacles, blocks, totalSize,
     origin: Math.min(cityMinX, cityMinZ),
     cell: avgCell,
-    shops, buildingAABBs,
+    shops, buildingAABBs, rocket,
     spawn,
     xAxis, zAxis,
   };
@@ -639,10 +640,10 @@ function makeCrowdPerson(shirtColor, pantsColor, hatColor = null) {
 
 function addSpaceAgeVisionAttraction(group, spawn) {
   const baseY = CONFIG.city.sidewalkHeight;
-  const signX = spawn.x - 9.5;
-  const signZ = spawn.z + 7.5;
-  const targetX = spawn.x - 3.5;
-  const targetZ = spawn.z + 3.2;
+  const signX = spawn.x - 8.5;
+  const signZ = spawn.z - 8.5;
+  const targetX = spawn.x - 3.8;
+  const targetZ = spawn.z - 5.0;
   const yaw = Math.atan2(targetX - signX, targetZ - signZ);
 
   const platform = new THREE.Mesh(
@@ -692,6 +693,7 @@ function addSpaceAgeVisionAttraction(group, spawn) {
     const person = makeCrowdPerson(colors[i % colors.length], 0x202028 + (i % 3) * 0x101010, i % 4 === 0 ? 0x76f7ff : null);
     person.position.set(signX + 1.1 + ox, baseY + 0.08, signZ - 0.9 + oz);
     person.rotation.y = Math.atan2(signX - person.position.x, signZ - person.position.z);
+    person.scale.setScalar(1.25);
     crowdGroup.add(person);
   });
   group.add(crowdGroup);
@@ -710,6 +712,93 @@ function addSpaceAgeVisionAttraction(group, spawn) {
     minimapColor: '#76f7ff',
     crowdMarkers,
     interactionRadius: 5.5,
+  };
+}
+
+function addRocketLaunchSite(group, spawn) {
+  const baseY = CONFIG.city.sidewalkHeight;
+  const x = spawn.x + 8.5;
+  const z = spawn.z - 11.0;
+  const rocketGroup = new THREE.Group();
+  rocketGroup.name = 'launch-rocket';
+  rocketGroup.position.set(x, baseY, z);
+
+  const pad = new THREE.Mesh(
+    new THREE.CylinderGeometry(3.0, 3.4, 0.35, 24),
+    new THREE.MeshLambertMaterial({ color: 0x2b333a })
+  );
+  pad.position.y = 0.18;
+  pad.castShadow = true;
+  pad.receiveShadow = true;
+  rocketGroup.add(pad);
+
+  const bodyMat = new THREE.MeshLambertMaterial({ color: 0xf3f5f7 });
+  const stripeMat = new THREE.MeshLambertMaterial({ color: 0xe64242 });
+  const glassMat = new THREE.MeshLambertMaterial({ color: 0x76d8ff, emissive: 0x123845, emissiveIntensity: 0.45 });
+
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.72, 4.6, 24), bodyMat);
+  body.position.y = 2.85;
+  body.castShadow = true;
+  rocketGroup.add(body);
+
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.64, 1.25, 24), stripeMat);
+  nose.position.y = 5.78;
+  nose.castShadow = true;
+  rocketGroup.add(nose);
+
+  const window = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 10), glassMat);
+  window.scale.z = 0.18;
+  window.position.set(0, 3.65, -0.64);
+  rocketGroup.add(window);
+
+  const stripe = new THREE.Mesh(new THREE.CylinderGeometry(0.635, 0.735, 0.34, 24), stripeMat);
+  stripe.position.y = 2.05;
+  rocketGroup.add(stripe);
+
+  const finMat = new THREE.MeshLambertMaterial({ color: 0xd72e2e });
+  for (let i = 0; i < 3; i++) {
+    const angle = i * Math.PI * 2 / 3;
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.05, 0.9), finMat);
+    fin.position.set(Math.sin(angle) * 0.78, 1.05, Math.cos(angle) * 0.78);
+    fin.rotation.y = angle;
+    fin.castShadow = true;
+    rocketGroup.add(fin);
+  }
+
+  const flame = new THREE.Mesh(
+    new THREE.ConeGeometry(0.42, 1.25, 18),
+    new THREE.MeshBasicMaterial({ color: 0xffb02e, transparent: true, opacity: 0 })
+  );
+  flame.name = 'rocket-flame';
+  flame.position.y = 0.25;
+  flame.rotation.x = Math.PI;
+  rocketGroup.add(flame);
+
+  const gantry = new THREE.Group();
+  const gantryMat = new THREE.MeshLambertMaterial({ color: 0x313943 });
+  for (const gx of [-1.85, 1.85]) {
+    const tower = new THREE.Mesh(new THREE.BoxGeometry(0.18, 4.4, 0.18), gantryMat);
+    tower.position.set(gx, 2.25, 1.9);
+    tower.castShadow = true;
+    gantry.add(tower);
+  }
+  for (let y = 0.9; y <= 4.1; y += 0.8) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(3.9, 0.12, 0.12), gantryMat);
+    rail.position.set(0, y, 1.9);
+    rail.castShadow = true;
+    gantry.add(rail);
+  }
+  rocketGroup.add(gantry);
+
+  group.add(rocketGroup);
+
+  return {
+    group: rocketGroup,
+    flame,
+    x,
+    z,
+    radius: 5.8,
+    launchUrl: 'https://expanse-runner-3d-spacegame.netlify.app',
   };
 }
 
