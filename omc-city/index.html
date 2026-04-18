@@ -45,6 +45,29 @@
       padding: 4px 8px;
       border-radius: 4px;
     }
+    #hud-mute {
+      position: fixed;
+      top: 14px;
+      right: 82px;
+      pointer-events: auto;
+      user-select: none;
+      cursor: pointer;
+      color: #fff;
+      background: rgba(0,0,0,0.45);
+      border: 1px solid rgba(255,255,255,0.32);
+      border-radius: 4px;
+      padding: 4px 8px;
+      font: 700 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      letter-spacing: 0.08em;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+    }
+    #hud-mute:hover {
+      background: rgba(0,0,0,0.65);
+    }
+    #hud-mute[aria-pressed="true"] {
+      color: #ffd28a;
+      border-color: rgba(255,210,138,0.65);
+    }
     #hud-pos {
       bottom: 14px;
       left: 18px;
@@ -318,6 +341,7 @@
     }
     body.launching #hud-title,
     body.launching #hud-fps,
+    body.launching #hud-mute,
     body.launching #hud-pos,
     body.launching #hud-hint,
     body.launching #minimap,
@@ -352,6 +376,7 @@
   <canvas id="gameCanvas"></canvas>
   <div id="hud-title" class="hud">CITY WALK</div>
   <div id="hud-fps" class="hud">FPS: --</div>
+  <button id="hud-mute" type="button" aria-pressed="false">MUTE</button>
   <div id="hud-pos" class="hud">X: 0.0  Z: 0.0</div>
   <div id="hud-hint" class="hud">WASD move/steer · SHIFT sprint/boost · 1-6 gears · 7 reverse · S auto-brakes & reverses · SPACE jump · E ride / talk / enter rocket · L launch · click for mouse-look</div>
   <div id="hud-prompt" class="hud"></div>

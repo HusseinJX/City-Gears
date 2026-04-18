@@ -12,7 +12,7 @@ import { createCar } from './car.js';
 import {
   attachAudioUnlock, playDialogOpen,
   startEngine, stopEngine, setEngineThrottle,
-  playGearShift,
+  playGearShift, setMuted,
 } from './audio.js';
 
 function init() {
@@ -217,6 +217,7 @@ function init() {
   }
 
   const hudFps = document.getElementById('hud-fps');
+  const hudMute = document.getElementById('hud-mute');
   const hudPos = document.getElementById('hud-pos');
   const hudPrompt = document.getElementById('hud-prompt');
   const hudGear = document.getElementById('hud-gear');
@@ -241,6 +242,26 @@ function init() {
   const DEFAULT_SITE_URL = 'http://127.0.0.1:8788/business/132';
   const DEFAULT_SITE_LABEL = 'WhatsLocal';
   const SPACE_GAME_URL = 'https://expanse-runner-3d-spacegame.netlify.app';
+
+  let muted = localStorage.getItem('cityWalkMuted') === 'true';
+  function updateMuteButton() {
+    if (!hudMute) return;
+    hudMute.textContent = muted ? 'SOUND' : 'MUTE';
+    hudMute.setAttribute('aria-pressed', String(muted));
+    hudMute.title = muted ? 'Turn sound on' : 'Mute sound';
+  }
+  setMuted(muted);
+  updateMuteButton();
+  if (hudMute) {
+    hudMute.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      muted = !muted;
+      localStorage.setItem('cityWalkMuted', String(muted));
+      setMuted(muted);
+      updateMuteButton();
+    });
+  }
 
   let currentNearShop = null;
   let dialogOpen = false;

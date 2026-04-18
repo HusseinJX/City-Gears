@@ -5,6 +5,7 @@ let ac = null;
 let ambientStarted = false;
 let masterGain = null;
 let engineNodes = null; // active motorcycle engine
+let muted = false;
 
 function ensure() {
   if (!ac) {
@@ -12,10 +13,35 @@ function ensure() {
     if (!C) return null;
     ac = new C();
     masterGain = ac.createGain();
-    masterGain.gain.value = 1.0;
+    masterGain.gain.value = muted ? 0 : 1.0;
     masterGain.connect(ac.destination);
   }
   return ac;
+}
+
+function applyMuteState() {
+  if (!masterGain) return;
+  const value = muted ? 0 : 1;
+  if (ac && ac.state === 'running') {
+    masterGain.gain.setTargetAtTime(value, ac.currentTime, 0.03);
+  } else {
+    masterGain.gain.value = value;
+  }
+}
+
+export function setMuted(nextMuted) {
+  muted = !!nextMuted;
+  ensure();
+  applyMuteState();
+  return muted;
+}
+
+export function toggleMuted() {
+  return setMuted(!muted);
+}
+
+export function isMuted() {
+  return muted;
 }
 
 function isReady() {
