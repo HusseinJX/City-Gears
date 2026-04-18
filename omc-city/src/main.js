@@ -99,10 +99,18 @@ function init() {
   const MM_R = MM_SIZE / 2;
   const MM_WORLD_RANGE = Math.max(90, Math.min(180, (cityInfo.totalSize || 300) * 0.35));
 
-  function worldToMM(wx, wz, cx, cz) {
+  function worldToMM(wx, wz, cx, cz, headingYaw) {
+    const dx = wx - cx;
+    const dz = wz - cz;
+    const forwardX = Math.sin(headingYaw);
+    const forwardZ = Math.cos(headingYaw);
+    const rightX = Math.cos(headingYaw);
+    const rightZ = -Math.sin(headingYaw);
+    const relRight = dx * rightX + dz * rightZ;
+    const relForward = dx * forwardX + dz * forwardZ;
     return {
-      sx: MM_R + (wx - cx) * (MM_R / MM_WORLD_RANGE),
-      sy: MM_R + (wz - cz) * (MM_R / MM_WORLD_RANGE),
+      sx: MM_R + relRight * (MM_R / MM_WORLD_RANGE),
+      sy: MM_R - relForward * (MM_R / MM_WORLD_RANGE),
     };
   }
 
@@ -128,16 +136,16 @@ function init() {
     mmCtx.strokeStyle = 'rgba(190,205,220,0.55)';
     mmCtx.lineWidth = 2;
     for (const z of zAxis) {
-      const a = worldToMM(minX, z, playerX, playerZ);
-      const b = worldToMM(maxX, z, playerX, playerZ);
+      const a = worldToMM(minX, z, playerX, playerZ, playerYaw);
+      const b = worldToMM(maxX, z, playerX, playerZ, playerYaw);
       mmCtx.beginPath();
       mmCtx.moveTo(a.sx, a.sy);
       mmCtx.lineTo(b.sx, b.sy);
       mmCtx.stroke();
     }
     for (const x of xAxis) {
-      const a = worldToMM(x, minZ, playerX, playerZ);
-      const b = worldToMM(x, maxZ, playerX, playerZ);
+      const a = worldToMM(x, minZ, playerX, playerZ, playerYaw);
+      const b = worldToMM(x, maxZ, playerX, playerZ, playerYaw);
       mmCtx.beginPath();
       mmCtx.moveTo(a.sx, a.sy);
       mmCtx.lineTo(b.sx, b.sy);
@@ -146,7 +154,7 @@ function init() {
 
     for (const shop of cityInfo.shops || []) {
       for (const marker of shop.crowdMarkers || []) {
-        const { sx, sy } = worldToMM(marker.x, marker.z, playerX, playerZ);
+        const { sx, sy } = worldToMM(marker.x, marker.z, playerX, playerZ, playerYaw);
         if (sx < 0 || sx > MM_SIZE || sy < 0 || sy > MM_SIZE) continue;
         mmCtx.beginPath();
         mmCtx.arc(sx, sy, 2.2, 0, Math.PI * 2);
@@ -154,7 +162,7 @@ function init() {
         mmCtx.fill();
       }
 
-      const { sx, sy } = worldToMM(shop.ownerPos.x, shop.ownerPos.z, playerX, playerZ);
+      const { sx, sy } = worldToMM(shop.ownerPos.x, shop.ownerPos.z, playerX, playerZ, playerYaw);
       if (sx < 0 || sx > MM_SIZE || sy < 0 || sy > MM_SIZE) continue;
       mmCtx.beginPath();
       mmCtx.arc(sx, sy, shop.crowdMarkers ? 5 : 3.5, 0, Math.PI * 2);
@@ -163,7 +171,7 @@ function init() {
     }
 
     for (const v of vehicles) {
-      const { sx, sy } = worldToMM(v.group.position.x, v.group.position.z, playerX, playerZ);
+      const { sx, sy } = worldToMM(v.group.position.x, v.group.position.z, playerX, playerZ, playerYaw);
       if (sx < 0 || sx > MM_SIZE || sy < 0 || sy > MM_SIZE) continue;
       mmCtx.beginPath();
       mmCtx.arc(sx, sy, 3, 0, Math.PI * 2);
@@ -172,7 +180,7 @@ function init() {
     }
 
     if (cityInfo.rocket) {
-      const { sx, sy } = worldToMM(cityInfo.rocket.x, cityInfo.rocket.z, playerX, playerZ);
+      const { sx, sy } = worldToMM(cityInfo.rocket.x, cityInfo.rocket.z, playerX, playerZ, playerYaw);
       if (sx >= 0 && sx <= MM_SIZE && sy >= 0 && sy <= MM_SIZE) {
         mmCtx.save();
         mmCtx.translate(sx, sy);
@@ -193,7 +201,6 @@ function init() {
 
     mmCtx.save();
     mmCtx.translate(MM_R, MM_R);
-    mmCtx.rotate(Math.PI - playerYaw);
     mmCtx.beginPath();
     mmCtx.moveTo(0, -8);
     mmCtx.lineTo(6, 6);
@@ -694,7 +701,7 @@ function init() {
     drawMinimap(
       character.group.position.x,
       character.group.position.z,
-      playerMode === 'drive' && currentVehicle ? currentVehicle.state.yaw : character.group.rotation.y
+      playerMode === 'drive' && currentVehicle ? currentVehicle.state.yaw + Math.PI : character.group.rotation.y
     );
 
     fpsAccumTime += dt;
