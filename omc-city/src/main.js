@@ -164,7 +164,7 @@ function init() {
 
     mmCtx.save();
     mmCtx.translate(MM_R, MM_R);
-    mmCtx.rotate(-playerYaw);
+    mmCtx.rotate(Math.PI - playerYaw);
     mmCtx.beginPath();
     mmCtx.moveTo(0, -8);
     mmCtx.lineTo(6, 6);
@@ -323,6 +323,7 @@ function init() {
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Escape' && dialogOpen) closeDialog();
     if (e.code === 'KeyF' && dialogOpen && saleAvailable && !e.repeat) {
+      e.preventDefault();
       openSaleIframe(dialogName ? dialogName.textContent : 'Shop');
     }
     if (playerMode === 'drive' && currentVehicle && !e.repeat) {

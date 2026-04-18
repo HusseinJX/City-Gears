@@ -249,10 +249,11 @@
     #sale-iframe-wrap {
       display: none;
       position: fixed;
-      bottom: 70px;
-      left: calc(50% + min(320px, 42vw));
-      width: min(420px, 36vw);
-      height: min(560px, 70vh);
+      right: 18px;
+      bottom: 224px;
+      width: min(420px, calc(100vw - 36px));
+      height: min(520px, calc(100vh - 260px));
+      min-height: 260px;
       background: rgba(20,24,32,0.95);
       border: 1px solid rgba(255,255,255,0.35);
       border-radius: 8px;
@@ -289,7 +290,7 @@
     #minimap {
       position: fixed;
       bottom: 46px;
-      left: 18px;
+      right: 18px;
       width: 160px;
       height: 160px;
       border-radius: 50%;
@@ -298,6 +299,19 @@
       overflow: hidden;
       pointer-events: none;
       user-select: none;
+    }
+    @media (max-width: 720px) {
+      #sale-iframe-wrap {
+        right: 10px;
+        left: 10px;
+        bottom: 216px;
+        width: auto;
+        height: min(420px, calc(100vh - 250px));
+      }
+      #minimap {
+        right: 10px;
+        bottom: 44px;
+      }
     }
   </style>
   <script type="importmap">
