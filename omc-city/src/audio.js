@@ -14,7 +14,7 @@ let trafficCatGain = null;
 let sfxCatGain = null;
 
 // Stored volume levels (0-1) per category
-const catVolumes = { engine: 1, ambient: 1, traffic: 1, sfx: 1 };
+const catVolumes = { engine: 0.25, ambient: 0.6, traffic: 0.6, sfx: 0.5 };
 
 function ensure() {
   if (!ac) {
@@ -437,8 +437,8 @@ export function playRocketLaunch() {
   sub.frequency.exponentialRampToValueAtTime(140, t0 + dur);
   const subG = c.createGain();
   subG.gain.setValueAtTime(0, t0);
-  subG.gain.linearRampToValueAtTime(0.55, t0 + 0.8);
-  subG.gain.linearRampToValueAtTime(0.8, t0 + dur);
+  subG.gain.linearRampToValueAtTime(0.28, t0 + 0.8);
+  subG.gain.linearRampToValueAtTime(0.4, t0 + dur);
   sub.connect(subG);
 
   // White noise exhaust plume
@@ -454,8 +454,8 @@ export function playRocketLaunch() {
   nlp.frequency.linearRampToValueAtTime(3500, t0 + 3);
   const noiseG = c.createGain();
   noiseG.gain.setValueAtTime(0, t0);
-  noiseG.gain.linearRampToValueAtTime(0.18, t0 + 1.2);
-  noiseG.gain.linearRampToValueAtTime(0.35, t0 + dur);
+  noiseG.gain.linearRampToValueAtTime(0.09, t0 + 1.2);
+  noiseG.gain.linearRampToValueAtTime(0.18, t0 + dur);
   noise.connect(nlp).connect(noiseG);
 
   // Mid crackle oscillator for combustion character
@@ -472,10 +472,10 @@ export function playRocketLaunch() {
   lfo.connect(lfoG).connect(crackle.frequency);
   const crackleG = c.createGain();
   crackleG.gain.setValueAtTime(0, t0);
-  crackleG.gain.linearRampToValueAtTime(0.22, t0 + 1.5);
+  crackleG.gain.linearRampToValueAtTime(0.11, t0 + 1.5);
   crackle.connect(crackleG);
 
-  // Master out via sfx bus
+  // Master out via engine bus (shares slider with vehicle engine)
   const masterG = c.createGain();
   masterG.gain.setValueAtTime(1, t0);
   masterG.gain.setValueAtTime(1, t0 + dur - 1.5);
@@ -483,7 +483,7 @@ export function playRocketLaunch() {
   subG.connect(masterG);
   noiseG.connect(masterG);
   crackleG.connect(masterG);
-  masterG.connect(sfxCatGain);
+  masterG.connect(engineCatGain);
 
   sub.start(t0); sub.stop(t0 + dur);
   noise.start(t0); noise.stop(t0 + dur);
@@ -569,7 +569,7 @@ export function startEngine() {
   const sub = c.createOscillator();
   sub.type = 'sawtooth';
   sub.frequency.value = 30;
-  const subGain = c.createGain(); subGain.gain.value = 0.55;
+  const subGain = c.createGain(); subGain.gain.value = 0.3;
 
   const osc1 = c.createOscillator();
   osc1.type = 'sawtooth';
@@ -577,12 +577,12 @@ export function startEngine() {
   const osc2 = c.createOscillator();
   osc2.type = 'sawtooth';
   osc2.frequency.value = 62.8;
-  const bodyGain = c.createGain(); bodyGain.gain.value = 0.7;
+  const bodyGain = c.createGain(); bodyGain.gain.value = 0.4;
 
   const bite = c.createOscillator();
   bite.type = 'square';
   bite.frequency.value = 120;
-  const biteGain = c.createGain(); biteGain.gain.value = 0.18;
+  const biteGain = c.createGain(); biteGain.gain.value = 0.1;
 
   const lpf = c.createBiquadFilter();
   lpf.type = 'lowpass';
@@ -597,7 +597,7 @@ export function startEngine() {
 
   const gain = c.createGain();
   gain.gain.setValueAtTime(0, now);
-  gain.gain.linearRampToValueAtTime(0.14, now + 0.4);
+  gain.gain.linearRampToValueAtTime(0.08, now + 0.4);
   lfo.connect(lfoDepth).connect(gain.gain);
 
   sub.connect(subGain).connect(lpf);
@@ -616,7 +616,7 @@ export function setEngineThrottle(throttle01) {
   const t = Math.min(1, Math.max(0, throttle01));
   const base = 60 + t * 110;
   const cutoff = 520 + t * 1700;
-  const vol = 0.14 + t * 0.12;
+  const vol = 0.08 + t * 0.07;
   const lfoRate = 9 + t * 22;
   const biteAmt = 0.18 + t * 0.22;
   const nowT = ac.currentTime;
