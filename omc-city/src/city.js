@@ -249,6 +249,8 @@ export function createCity(scene) {
   const shops = generateShops(group, blocks);
   shops.push(addSpaceAgeVisionAttraction(group, spawnParkBlock, spawn));
   const rocket = addRocketLaunchSite(group, spaceFacilityBlock, spawn);
+  const airplaneLandmark = addAirplaneBuilding(group, spawnParkBlock, spawn, buildingAABBs);
+  if (airplaneLandmark.shop) shops.push(airplaneLandmark.shop);
 
   // For legacy compatibility (camera raycast, old code paths)
   const avgCell = (sizeX + sizeZ) / (xAxis.length + zAxis.length - 2);
@@ -257,7 +259,7 @@ export function createCity(scene) {
     group, obstacles, blocks, totalSize,
     origin: Math.min(cityMinX, cityMinZ),
     cell: avgCell,
-    shops, buildingAABBs, rocket,
+    shops, buildingAABBs, rocket, airplaneLandmark,
     spawn,
     xAxis, zAxis,
   };
@@ -981,4 +983,257 @@ function generateShops(group, blocks) {
     i++;
   }
   return shops;
+}
+
+// ---------- Airplane landmark (kiosk + plane inside existing park) ----------
+function addAirplaneBuilding(group, block, spawn, AABBs) {
+  const C = CONFIG.city;
+  // Place in the opposite corner of the spawn park from the Space Age Vision sign
+  const x = block ? block.x + block.width * 0.25 : spawn.x + 10;
+  const z = block ? block.z + block.depth * 0.25 : spawn.z + 10;
+  const base = C.sidewalkHeight;
+
+  // Kiosk — small 4×4 base, 2.8 tall
+  const kioskW = 4, kioskD = 4, kioskH = 4.5;
+  const kioskMat = new THREE.MeshLambertMaterial({ color: 0xe8dfc8 });
+  const kiosk = new THREE.Mesh(new THREE.BoxGeometry(kioskW, kioskH, kioskD), kioskMat);
+  kiosk.position.set(x, base + kioskH / 2, z);
+  kiosk.castShadow = true;
+  kiosk.receiveShadow = true;
+  group.add(kiosk);
+
+  // Kiosk roof overhang
+  const kioskRoof = new THREE.Mesh(
+    new THREE.BoxGeometry(kioskW + 1.2, 0.25, kioskD + 1.2),
+    new THREE.MeshLambertMaterial({ color: 0x4a5560 })
+  );
+  kioskRoof.position.set(x, base + kioskH + 0.12, z);
+  group.add(kioskRoof);
+
+  // Kiosk window strip
+  const kwMat = new THREE.MeshLambertMaterial({ color: 0x9dd4f0, emissive: 0x0a2030, emissiveIntensity: 0.4 });
+  for (const s of [-1, 1]) {
+    const kw = new THREE.Mesh(new THREE.BoxGeometry(2.8, 1.0, 0.08), kwMat);
+    kw.position.set(x, base + kioskH * 0.62, z + s * (kioskD / 2 + 0.04));
+    group.add(kw);
+  }
+
+  AABBs.push({ minX: x - kioskW / 2, maxX: x + kioskW / 2, minZ: z - kioskD / 2, maxZ: z + kioskD / 2 });
+
+  // ---- Airplane on top of kiosk ----
+  const planeY = base + kioskH + 0.25;
+  const pg = new THREE.Group();
+  pg.position.set(x, planeY, z);
+  group.add(pg);
+
+  const whiteMat  = new THREE.MeshLambertMaterial({ color: 0xeef1f5 });
+  const blueMat   = new THREE.MeshLambertMaterial({ color: 0x1a3ea0 });
+  const glassMat  = new THREE.MeshLambertMaterial({ color: 0x8adcf8, emissive: 0x0a2840, emissiveIntensity: 0.6 });
+  const engineMat = new THREE.MeshLambertMaterial({ color: 0xa8acb4 });
+  const darkMat   = new THREE.MeshLambertMaterial({ color: 0x14181e });
+  const strutMat  = new THREE.MeshLambertMaterial({ color: 0x888e98 });
+
+  // ── Fuselage: LatheGeometry for proper taper ──
+  const fusePts = [
+    new THREE.Vector2(0,    0),     // tail tip
+    new THREE.Vector2(0.48, 0.7),
+    new THREE.Vector2(0.72, 2.2),
+    new THREE.Vector2(0.88, 4.5),   // rear cabin
+    new THREE.Vector2(0.95, 7.0),   // main cabin
+    new THREE.Vector2(0.95, 9.5),
+    new THREE.Vector2(0.85,11.0),   // forward shoulder
+    new THREE.Vector2(0.62,12.2),   // nose taper
+    new THREE.Vector2(0.26,13.1),
+    new THREE.Vector2(0,   13.6),   // nose tip
+  ];
+  const fuseGeo = new THREE.LatheGeometry(fusePts, 18);
+  fuseGeo.rotateZ(-Math.PI / 2);
+  fuseGeo.translate(-6.8, 0, 0);
+  const fuselage = new THREE.Mesh(fuseGeo, whiteMat);
+  fuselage.position.set(0, 1.0, 0);
+  fuselage.castShadow = true;
+  pg.add(fuselage);
+
+  // ── Blue cheatline stripe (both sides) ──
+  for (const s of [-1, 1]) {
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(8.5, 0.38, 0.06), blueMat);
+    stripe.position.set(-0.5, 1.62, s * 0.96);
+    pg.add(stripe);
+  }
+
+  // ── Cockpit windows (angled tinted panels near nose) ──
+  for (const [wx, wz, ry] of [
+    [5.2,  0.55, -0.45],
+    [5.2, -0.55,  0.45],
+    [5.6,  0.28, -0.25],
+    [5.6, -0.28,  0.25],
+  ]) {
+    const cw = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.55, 0.06), glassMat);
+    cw.position.set(wx, 1.55, wz);
+    cw.rotation.y = ry;
+    pg.add(cw);
+  }
+
+  // ── Passenger windows ──
+  for (let wi = -3.8; wi <= 3.0; wi += 1.35) {
+    for (const s of [-1, 1]) {
+      const pw = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.44, 0.06), glassMat);
+      pw.position.set(wi, 1.68, s * 0.96);
+      pg.add(pw);
+    }
+  }
+
+  // ── Swept wings (custom BufferGeometry trapezoid) ──
+  function makeWingGeo(side) {
+    // side: 1 = right (+Z), -1 = left (-Z)
+    const span = 8.5 * side;
+    const sweep = 2.8; // tip leading edge swept back
+    const rc = 3.0;    // root chord
+    const tc = 1.6;    // tip chord
+    const th = 0.22;   // thickness
+    const v = new Float32Array([
+      // top:  root-lead(0), root-trail(1), tip-trail(2), tip-lead(3)
+       0.3, th/2, 0,               // 0 root leading
+      -rc+0.3, th/2, 0,            // 1 root trailing
+      -sweep-tc+0.3, th/2, span,   // 2 tip trailing
+      -sweep+0.3, th/2, span,      // 3 tip leading
+      // bottom
+       0.3,-th/2, 0,               // 4
+      -rc+0.3,-th/2, 0,            // 5
+      -sweep-tc+0.3,-th/2, span,   // 6
+      -sweep+0.3,-th/2, span,      // 7
+    ]);
+    const idx = [
+      0,1,2, 0,2,3,    // top
+      4,6,5, 4,7,6,    // bottom
+      0,4,5, 0,5,1,    // root cap
+      3,7,6, 3,6,2,    // tip cap
+      0,3,7, 0,7,4,    // leading edge
+      1,5,6, 1,6,2,    // trailing edge
+    ];
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(v, 3));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    return geo;
+  }
+  for (const side of [1, -1]) {
+    const wing = new THREE.Mesh(makeWingGeo(side), whiteMat);
+    wing.position.set(0, 0.62, 0);
+    wing.castShadow = true;
+    pg.add(wing);
+    // Winglet
+    const wl = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.6, 0.8), blueMat);
+    wl.position.set(-2.5, 1.42, side * 8.5);
+    pg.add(wl);
+  }
+
+  // ── Engine nacelles hung under wings (2 per side) ──
+  for (const [ex, ez] of [[-0.8, 3.8], [-2.6, 6.0], [-0.8,-3.8], [-2.6,-6.0]]) {
+    // Pylon strut
+    const pylon = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.7, 0.55), strutMat);
+    pylon.position.set(ex, 0.18, ez);
+    pg.add(pylon);
+    // Nacelle body
+    const nacPts = [
+      new THREE.Vector2(0,    0),
+      new THREE.Vector2(0.36, 0.15),
+      new THREE.Vector2(0.44, 0.6),
+      new THREE.Vector2(0.44, 1.8),
+      new THREE.Vector2(0.38, 2.5),
+      new THREE.Vector2(0.28, 2.9),
+      new THREE.Vector2(0,    3.0),
+    ];
+    const nacGeo = new THREE.LatheGeometry(nacPts, 12);
+    nacGeo.rotateZ(-Math.PI / 2);
+    nacGeo.translate(-1.5, 0, 0);
+    const nac = new THREE.Mesh(nacGeo, engineMat);
+    nac.position.set(ex, -0.22, ez);
+    nac.castShadow = true;
+    pg.add(nac);
+    // Inlet ring
+    const inlet = new THREE.Mesh(new THREE.TorusGeometry(0.44, 0.06, 8, 14), darkMat);
+    inlet.rotation.y = Math.PI / 2;
+    inlet.position.set(ex + 1.5, -0.22, ez);
+    pg.add(inlet);
+    // Dark intake cavity
+    const cavity = new THREE.Mesh(new THREE.CircleGeometry(0.38, 12), darkMat);
+    cavity.rotation.y = Math.PI / 2;
+    cavity.position.set(ex + 1.46, -0.22, ez);
+    pg.add(cavity);
+  }
+
+  // ── Vertical tail fin (swept, tapered) ──
+  {
+    const sweep = 1.4;
+    const h = 3.8, baseC = 2.8, topC = 1.0, th = 0.26;
+    const v = new Float32Array([
+      // front:  base-bot(0), base-top(1), tip-top(2), tip-bot — reuse as swept shape
+       0,    0,   -th/2,  // 0 base leading bottom
+       0,    0,    th/2,  // 1 base leading top-edge (Z axis is fin width here)
+      -baseC,0,   -th/2,  // 2 base trailing bottom
+      -baseC,0,    th/2,  // 3 base trailing top-edge
+      -sweep, h,  -th/2,  // 4 tip leading bottom
+      -sweep, h,   th/2,  // 5 tip leading top-edge
+      -sweep-topC,h,-th/2,// 6 tip trailing bottom
+      -sweep-topC,h, th/2,// 7 tip trailing top-edge
+    ]);
+    // Faces: left(-Z), right(+Z), leading, trailing, base, tip
+    const idx = [
+      0,4,6, 0,6,2,   // left face
+      1,3,7, 1,7,5,   // right face
+      0,1,5, 0,5,4,   // leading edge
+      2,6,7, 2,7,3,   // trailing edge
+      0,2,3, 0,3,1,   // base cap
+      4,5,7, 4,7,6,   // tip cap
+    ];
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(v, 3));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    const fin = new THREE.Mesh(geo, blueMat);
+    fin.position.set(-4.5, 1.0, 0);
+    fin.castShadow = true;
+    pg.add(fin);
+  }
+
+  // ── Horizontal stabilizers (smaller swept wing geo) ──
+  function makeStabGeo(side) {
+    const span = 3.5 * side, sweep = 0.9, rc = 1.5, tc = 0.7, th = 0.16;
+    const v = new Float32Array([
+       0.2, th/2, 0,  -rc+0.2, th/2, 0,  -sweep-tc+0.2, th/2, span,  -sweep+0.2, th/2, span,
+       0.2,-th/2, 0,  -rc+0.2,-th/2, 0,  -sweep-tc+0.2,-th/2, span,  -sweep+0.2,-th/2, span,
+    ]);
+    const idx = [0,1,2,0,2,3, 4,6,5,4,7,6, 0,4,5,0,5,1, 3,7,6,3,6,2, 0,3,7,0,7,4, 1,5,6,1,6,2];
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(v, 3));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    return geo;
+  }
+  for (const side of [1, -1]) {
+    const stab = new THREE.Mesh(makeStabGeo(side), whiteMat);
+    stab.position.set(-5.2, 0.82, 0);
+    pg.add(stab);
+  }
+
+  // ── Travel agent NPC beside the kiosk ──
+  const agentX = x - kioskW / 2 - 1.6;
+  const agentZ = z;
+  const agent = makeCrowdPerson(0x1e4db8, 0x1a1a2e, null);
+  agent.position.set(agentX, base + 0.08, agentZ);
+  agent.rotation.y = Math.PI / 4; // faces toward kiosk
+  agent.scale.setScalar(1.1);
+  group.add(agent);
+
+  const shop = {
+    name: 'Airport Info Agent',
+    dialog: 'Welcome! This is City Airport — home of our famous display aircraft. Press F to explore travel destinations around the city.',
+    ownerPos: { x: agentX, z: agentZ },
+    interactionRadius: 4.0,
+    prompt: 'Press E to talk to the Airport Agent',
+    isTravelAgent: true,
+  };
+
+  return { x, z, shop };
 }

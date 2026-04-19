@@ -237,6 +237,17 @@ function init() {
       }
     }
 
+    if (cityInfo.airplaneLandmark) {
+      const { sx, sy } = worldToMM(cityInfo.airplaneLandmark.x, cityInfo.airplaneLandmark.z, playerX, playerZ);
+      mmCtx.beginPath();
+      mmCtx.arc(sx, sy, 6, 0, Math.PI * 2);
+      mmCtx.fillStyle = '#60c8ff';
+      mmCtx.fill();
+      mmCtx.strokeStyle = '#fff';
+      mmCtx.lineWidth = 1.5;
+      mmCtx.stroke();
+    }
+
     mmCtx.beginPath();
     mmCtx.arc(MM_R, MM_R, 5, 0, Math.PI * 2);
     mmCtx.fillStyle = '#4af0a0';
@@ -357,6 +368,7 @@ function init() {
   let currentNearShop = null;
   let dialogOpen = false;
   let saleAvailable = false;
+  let currentDialogIsTravelAgent = false;
   let currentSiteUrl = DEFAULT_SITE_URL;
   let currentSiteLabel = DEFAULT_SITE_LABEL;
   let currentSiteTitle = 'Sale';
@@ -384,6 +396,37 @@ function init() {
   }
   if (saleIframeClose) saleIframeClose.addEventListener('click', closeSaleIframe);
 
+  const travelPanel = document.getElementById('travel-panel');
+  const travelClose = document.getElementById('travel-close');
+  let travelOpen = false;
+
+  function openTravelPanel() {
+    if (!travelPanel) return;
+    travelOpen = true;
+    travelPanel.style.display = 'block';
+  }
+  function closeTravelPanel() {
+    if (!travelPanel) return;
+    travelOpen = false;
+    travelPanel.style.display = 'none';
+  }
+
+  if (travelClose) travelClose.addEventListener('click', closeTravelPanel);
+
+  document.querySelectorAll('.travel-dest').forEach(el => {
+    el.addEventListener('click', () => {
+      const dest = el.dataset.dest;
+      let tx = cityInfo.spawn.x, tz = cityInfo.spawn.z;
+      if (dest === 'rocket' && cityInfo.rocket) { tx = cityInfo.rocket.x; tz = cityInfo.rocket.z + 6; }
+      else if (dest === 'park') { tx = cityInfo.spawn.x - 10; tz = cityInfo.spawn.z - 10; }
+      else if (dest === 'center') { tx = cityInfo.spawn.x; tz = cityInfo.spawn.z; }
+      else if (dest === 'airport' && cityInfo.airplaneLandmark) { tx = cityInfo.airplaneLandmark.x - 8; tz = cityInfo.airplaneLandmark.z; }
+      character.group.position.set(tx, CONFIG.city.sidewalkHeight, tz);
+      closeTravelPanel();
+      closeDialog();
+    });
+  });
+
   function openDialog(shop) {
     if (!shop || dialogOpen) return;
     dialogOpen = true;
@@ -394,8 +437,11 @@ function init() {
     currentSiteLabel = shop.siteLabel || DEFAULT_SITE_LABEL;
     currentSiteTitle = shop.siteTitle || `${shop.name} Sale`;
     saleAvailable = true;
+    currentDialogIsTravelAgent = !!shop.isTravelAgent;
     if (dialogSaleHint) {
-      dialogSaleHint.textContent = `Press F to open ${currentSiteLabel}`;
+      dialogSaleHint.textContent = shop.isTravelAgent
+        ? 'Press F for travel destinations'
+        : `Press F to open ${currentSiteLabel}`;
       dialogSaleHint.style.display = 'block';
     }
     playDialogOpen();
@@ -403,12 +449,14 @@ function init() {
   function closeDialog() {
     dialogOpen = false;
     saleAvailable = false;
+    currentDialogIsTravelAgent = false;
     currentSiteUrl = DEFAULT_SITE_URL;
     currentSiteLabel = DEFAULT_SITE_LABEL;
     currentSiteTitle = 'Sale';
     if (dialogBox) dialogBox.style.display = 'none';
     if (dialogSaleHint) dialogSaleHint.style.display = 'none';
     closeSaleIframe();
+    closeTravelPanel();
   }
 
   function distSq(ax, az, bx, bz) {
@@ -557,10 +605,14 @@ function init() {
   });
 
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'Escape' && dialogOpen) closeDialog();
+    if (e.code === 'Escape' && (dialogOpen || travelOpen)) { closeDialog(); closeTravelPanel(); }
     if (e.code === 'KeyF' && dialogOpen && saleAvailable && !e.repeat) {
       e.preventDefault();
-      openSaleIframe(dialogName ? dialogName.textContent : 'Shop');
+      if (currentDialogIsTravelAgent) {
+        openTravelPanel();
+      } else {
+        openSaleIframe(dialogName ? dialogName.textContent : 'Shop');
+      }
     }
     if (e.code === 'KeyL' && rocketState === 'entered' && !e.repeat) {
       e.preventDefault();
