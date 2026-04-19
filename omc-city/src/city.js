@@ -329,8 +329,8 @@ function addPark(group, cx, cz, w, d, obstacles, AABBs) {
 
 // ---------- Block type: TOWER ----------
 function addTower(group, cx, cz, w, d, getWindowTex, obstacles, AABBs) {
-  // One tall building with stepped setbacks
-  const base = Math.min(w, d) * 0.8;
+  // One tall building with stepped setbacks — clamp to inner block
+  const base = Math.min(Math.min(w, d) * 0.72, Math.min(w, d) - 4);
   const totalH = 32 + Math.random() * 20;       // 32-52m
   const color = CONFIG.buildingColors[Math.floor(Math.random() * CONFIG.buildingColors.length)];
 
@@ -379,8 +379,11 @@ function addMixed(group, cx, cz, w, d, getWindowTex, obstacles, AABBs) {
       const bw = cellW - margin * 2 - Math.random() * cellW * 0.2;
       const bd = cellD - margin * 2 - Math.random() * cellD * 0.2;
       if (bw < 3 || bd < 3) continue;
-      const bx = cx - w / 2 + cellW * (c + 0.5) + (Math.random() - 0.5) * cellW * 0.15;
-      const bz = cz - d / 2 + cellD * (r + 0.5) + (Math.random() - 0.5) * cellD * 0.15;
+      const rawBx = cx - w / 2 + cellW * (c + 0.5) + (Math.random() - 0.5) * cellW * 0.15;
+      const rawBz = cz - d / 2 + cellD * (r + 0.5) + (Math.random() - 0.5) * cellD * 0.15;
+      // Clamp so building never overflows block boundary into road
+      const bx = Math.max(cx - w / 2 + bw / 2 + 1.5, Math.min(cx + w / 2 - bw / 2 - 1.5, rawBx));
+      const bz = Math.max(cz - d / 2 + bd / 2 + 1.5, Math.min(cz + d / 2 - bd / 2 - 1.5, rawBz));
       const h = 4 + Math.random() * Math.random() * 24;  // bias toward shorter
       const color = CONFIG.buildingColors[Math.floor(Math.random() * CONFIG.buildingColors.length)];
       const mesh = makeBuildingMesh(bw, h, bd, color, getWindowTex);
@@ -408,7 +411,7 @@ function addRestaurantRow(group, cx, cz, w, d, getWindowTex, getAwningTex, obsta
   const count = Math.max(2, Math.min(5, Math.floor(mainLen / 10)));
   const segLen = mainLen / count;
   const bWidth = segLen - 1.4;
-  const bDepth = crossLen - 3.0;
+  const bDepth = Math.min(crossLen - 6.0, crossLen * 0.72);
   if (bWidth < 3 || bDepth < 3) { addMixed(group, cx, cz, w, d, getWindowTex, obstacles, AABBs); return; }
 
   const restCfg = CONFIG.restaurants;

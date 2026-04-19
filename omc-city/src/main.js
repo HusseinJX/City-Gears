@@ -16,6 +16,8 @@ import {
   playRocketLaunch,
 } from './audio.js';
 import { createRaceTrack, createRaceManager } from './race.js';
+import { createEverest } from './everest.js';
+import { makeSkyTexture } from './textures.js';
 
 function init() {
   const canvas = document.getElementById('gameCanvas');
@@ -28,8 +30,10 @@ function init() {
 
   const scene = new THREE.Scene();
 
-  createEnvironment(scene, renderer);
+  const envInfo = createEnvironment(scene, renderer);
   const cityInfo = createCity(scene);
+  const everestInfo = createEverest(scene);
+  cityInfo.shops.push(everestInfo.returnShop);
   const propsInfo = createProps(scene, cityInfo);
 
   const character = createCharacter();
@@ -93,9 +97,9 @@ function init() {
 
   const vehicles = [motorcycle, car];
 
-  // Race track outside the city
-  const raceTrack = createRaceTrack(scene, 0, 0);
-  const raceManager = createRaceManager(scene, raceTrack);
+  // Race circuit routed through city streets
+  const raceTrack = createRaceTrack(scene, 0, 0, cityInfo.xAxis, cityInfo.zAxis);
+  const raceManager = createRaceManager(scene, raceTrack, { isBlocked: isBlockedStatic });
   let currentNearRace = false;
   let raceActive = false;
   let raceFinishTimeout = null;
@@ -127,127 +131,192 @@ function init() {
     mmCtx.fillStyle = '#1e2028';
     mmCtx.fillRect(0, 0, MM_SIZE, MM_SIZE);
 
-    const xAxis = cityInfo.xAxis || [];
-    const zAxis = cityInfo.zAxis || [];
-    const minX = xAxis.length ? xAxis[0] - CONFIG.city.roadWidth : -cityInfo.totalSize / 2;
-    const maxX = xAxis.length ? xAxis[xAxis.length - 1] + CONFIG.city.roadWidth : cityInfo.totalSize / 2;
-    const minZ = zAxis.length ? zAxis[0] - CONFIG.city.roadWidth : -cityInfo.totalSize / 2;
-    const maxZ = zAxis.length ? zAxis[zAxis.length - 1] + CONFIG.city.roadWidth : cityInfo.totalSize / 2;
-
-    mmCtx.strokeStyle = 'rgba(190,205,220,0.55)';
-    mmCtx.lineWidth = 2;
-    for (const z of zAxis) {
-      const a = worldToMM(minX, z, playerX, playerZ);
-      const b = worldToMM(maxX, z, playerX, playerZ);
-      mmCtx.beginPath();
-      mmCtx.moveTo(a.sx, a.sy);
-      mmCtx.lineTo(b.sx, b.sy);
-      mmCtx.stroke();
-    }
-    for (const x of xAxis) {
-      const a = worldToMM(x, minZ, playerX, playerZ);
-      const b = worldToMM(x, maxZ, playerX, playerZ);
-      mmCtx.beginPath();
-      mmCtx.moveTo(a.sx, a.sy);
-      mmCtx.lineTo(b.sx, b.sy);
-      mmCtx.stroke();
-    }
-
-    for (const shop of cityInfo.shops || []) {
-      for (const marker of shop.crowdMarkers || []) {
-        const { sx, sy } = worldToMM(marker.x, marker.z, playerX, playerZ);
-        if (sx < 0 || sx > MM_SIZE || sy < 0 || sy > MM_SIZE) continue;
-        mmCtx.beginPath();
-        mmCtx.arc(sx, sy, 2.2, 0, Math.PI * 2);
-        mmCtx.fillStyle = shop.minimapColor || '#ffd28a';
-        mmCtx.fill();
-      }
-
-      const { sx, sy } = worldToMM(shop.ownerPos.x, shop.ownerPos.z, playerX, playerZ);
-      if (sx < 0 || sx > MM_SIZE || sy < 0 || sy > MM_SIZE) continue;
-      mmCtx.beginPath();
-      mmCtx.arc(sx, sy, shop.crowdMarkers ? 5 : 3.5, 0, Math.PI * 2);
-      mmCtx.fillStyle = shop.minimapColor || '#ffd28a';
-      mmCtx.fill();
-    }
-
-    for (const v of vehicles) {
-      const { sx, sy } = worldToMM(v.group.position.x, v.group.position.z, playerX, playerZ);
-      if (sx < 0 || sx > MM_SIZE || sy < 0 || sy > MM_SIZE) continue;
-      mmCtx.beginPath();
-      mmCtx.arc(sx, sy, 3, 0, Math.PI * 2);
-      mmCtx.fillStyle = v.kind === 'car' ? '#76a7ff' : '#ff6b6b';
-      mmCtx.fill();
-    }
-
-    // Race track outline
-    {
-      const wpts = raceTrack.waypoints;
-      mmCtx.strokeStyle = 'rgba(200,200,60,0.4)';
-      mmCtx.lineWidth = 1;
-      mmCtx.beginPath();
-      for (let i = 0; i < wpts.length; i++) {
-        const { sx, sy } = worldToMM(wpts[i].x, wpts[i].z, playerX, playerZ);
-        if (i === 0) mmCtx.moveTo(sx, sy);
-        else mmCtx.lineTo(sx, sy);
-      }
-      mmCtx.closePath();
-      mmCtx.stroke();
-
-      // Start zone dot
-      const { sx: szx, sy: szy } = worldToMM(raceTrack.startZone.x, raceTrack.startZone.z, playerX, playerZ);
-      if (szx >= 0 && szx <= MM_SIZE && szy >= 0 && szy <= MM_SIZE) {
-        mmCtx.beginPath();
-        mmCtx.arc(szx, szy, 3.5, 0, Math.PI * 2);
-        mmCtx.fillStyle = 'rgba(255,220,50,0.7)';
-        mmCtx.fill();
-      }
-    }
-
-    // AI car dots (during active race)
     if (raceActive) {
-      const rsAI = raceManager.getState();
-      for (const car of rsAI.aiCars) {
-        const { sx, sy } = worldToMM(car.x, car.z, playerX, playerZ);
-        if (sx < 0 || sx > MM_SIZE || sy < 0 || sy > MM_SIZE) continue;
-        mmCtx.beginPath();
-        mmCtx.arc(sx, sy, 2.5, 0, Math.PI * 2);
-        mmCtx.fillStyle = `#${car.color.toString(16).padStart(6, '0')}`;
-        mmCtx.fill();
+      // ── Race mode: roads + next checkpoint ──
+      const xAxis = cityInfo.xAxis || [];
+      const zAxis = cityInfo.zAxis || [];
+      const minX = xAxis.length ? xAxis[0] - CONFIG.city.roadWidth : -cityInfo.totalSize / 2;
+      const maxX = xAxis.length ? xAxis[xAxis.length - 1] + CONFIG.city.roadWidth : cityInfo.totalSize / 2;
+      const minZ = zAxis.length ? zAxis[0] - CONFIG.city.roadWidth : -cityInfo.totalSize / 2;
+      const maxZ = zAxis.length ? zAxis[zAxis.length - 1] + CONFIG.city.roadWidth : cityInfo.totalSize / 2;
+      mmCtx.strokeStyle = 'rgba(190,205,220,0.55)';
+      mmCtx.lineWidth = 2;
+      for (const z of zAxis) {
+        const a = worldToMM(minX, z, playerX, playerZ);
+        const b = worldToMM(maxX, z, playerX, playerZ);
+        mmCtx.beginPath(); mmCtx.moveTo(a.sx, a.sy); mmCtx.lineTo(b.sx, b.sy); mmCtx.stroke();
       }
-    }
+      for (const x of xAxis) {
+        const a = worldToMM(x, minZ, playerX, playerZ);
+        const b = worldToMM(x, maxZ, playerX, playerZ);
+        mmCtx.beginPath(); mmCtx.moveTo(a.sx, a.sy); mmCtx.lineTo(b.sx, b.sy); mmCtx.stroke();
+      }
 
-    if (cityInfo.rocket) {
-      const { sx, sy } = worldToMM(cityInfo.rocket.x, cityInfo.rocket.z, playerX, playerZ);
-      if (sx >= 0 && sx <= MM_SIZE && sy >= 0 && sy <= MM_SIZE) {
+      const rs = raceManager.getState();
+      const cpIdx = rs.nextCp[0];
+      const cp = raceTrack.checkpointPositions[cpIdx];
+      const { sx, sy } = worldToMM(cp.x, cp.z, playerX, playerZ);
+      const inBounds = sx >= 0 && sx <= MM_SIZE && sy >= 0 && sy <= MM_SIZE;
+
+      // AI cars as colored dots
+      for (const aiCar of rs.aiCars) {
+        const ap = worldToMM(aiCar.group.position.x, aiCar.group.position.z, playerX, playerZ);
+        if (ap.sx < 0 || ap.sx > MM_SIZE || ap.sy < 0 || ap.sy > MM_SIZE) continue;
+        mmCtx.beginPath();
+        mmCtx.arc(ap.sx, ap.sy, 4, 0, Math.PI * 2);
+        mmCtx.fillStyle = `#${aiCar.color.toString(16).padStart(6, '0')}`;
+        mmCtx.fill();
+        mmCtx.strokeStyle = '#fff';
+        mmCtx.lineWidth = 1;
+        mmCtx.stroke();
+      }
+
+      if (inBounds) {
+        // pulsing ring
+        mmCtx.beginPath();
+        mmCtx.arc(sx, sy, 8, 0, Math.PI * 2);
+        mmCtx.strokeStyle = 'rgba(255,80,200,0.4)';
+        mmCtx.lineWidth = 3;
+        mmCtx.stroke();
+        // filled dot
+        mmCtx.beginPath();
+        mmCtx.arc(sx, sy, 5, 0, Math.PI * 2);
+        mmCtx.fillStyle = '#ff1aaa';
+        mmCtx.fill();
+        mmCtx.strokeStyle = '#fff';
+        mmCtx.lineWidth = 1.5;
+        mmCtx.stroke();
+      } else {
+        // off-screen: draw an arrow at the edge pointing toward it
+        const angle = Math.atan2(sy - MM_R, sx - MM_R);
+        const ex = MM_R + Math.cos(angle) * (MM_R - 10);
+        const ey = MM_R + Math.sin(angle) * (MM_R - 10);
         mmCtx.save();
-        mmCtx.translate(sx, sy);
+        mmCtx.translate(ex, ey);
+        mmCtx.rotate(angle + Math.PI / 2);
         mmCtx.beginPath();
         mmCtx.moveTo(0, -7);
         mmCtx.lineTo(5, 5);
         mmCtx.lineTo(0, 2);
         mmCtx.lineTo(-5, 5);
         mmCtx.closePath();
-        mmCtx.fillStyle = '#ff5b45';
+        mmCtx.fillStyle = '#ff1aaa';
         mmCtx.fill();
-        mmCtx.strokeStyle = '#ffd28a';
-        mmCtx.lineWidth = 1.5;
-        mmCtx.stroke();
         mmCtx.restore();
       }
-    }
+    } else {
+      // ── Normal mode: full city map ──
+      const xAxis = cityInfo.xAxis || [];
+      const zAxis = cityInfo.zAxis || [];
+      const minX = xAxis.length ? xAxis[0] - CONFIG.city.roadWidth : -cityInfo.totalSize / 2;
+      const maxX = xAxis.length ? xAxis[xAxis.length - 1] + CONFIG.city.roadWidth : cityInfo.totalSize / 2;
+      const minZ = zAxis.length ? zAxis[0] - CONFIG.city.roadWidth : -cityInfo.totalSize / 2;
+      const maxZ = zAxis.length ? zAxis[zAxis.length - 1] + CONFIG.city.roadWidth : cityInfo.totalSize / 2;
 
-    if (cityInfo.airplaneLandmark) {
-      const { sx, sy } = worldToMM(cityInfo.airplaneLandmark.x, cityInfo.airplaneLandmark.z, playerX, playerZ);
-      mmCtx.beginPath();
-      mmCtx.arc(sx, sy, 6, 0, Math.PI * 2);
-      mmCtx.fillStyle = '#60c8ff';
-      mmCtx.fill();
-      mmCtx.strokeStyle = '#fff';
-      mmCtx.lineWidth = 1.5;
-      mmCtx.stroke();
-    }
+      mmCtx.strokeStyle = 'rgba(190,205,220,0.55)';
+      mmCtx.lineWidth = 2;
+      for (const z of zAxis) {
+        const a = worldToMM(minX, z, playerX, playerZ);
+        const b = worldToMM(maxX, z, playerX, playerZ);
+        mmCtx.beginPath();
+        mmCtx.moveTo(a.sx, a.sy);
+        mmCtx.lineTo(b.sx, b.sy);
+        mmCtx.stroke();
+      }
+      for (const x of xAxis) {
+        const a = worldToMM(x, minZ, playerX, playerZ);
+        const b = worldToMM(x, maxZ, playerX, playerZ);
+        mmCtx.beginPath();
+        mmCtx.moveTo(a.sx, a.sy);
+        mmCtx.lineTo(b.sx, b.sy);
+        mmCtx.stroke();
+      }
 
+      for (const shop of cityInfo.shops || []) {
+        for (const marker of shop.crowdMarkers || []) {
+          const { sx, sy } = worldToMM(marker.x, marker.z, playerX, playerZ);
+          if (sx < 0 || sx > MM_SIZE || sy < 0 || sy > MM_SIZE) continue;
+          mmCtx.beginPath();
+          mmCtx.arc(sx, sy, 2.2, 0, Math.PI * 2);
+          mmCtx.fillStyle = shop.minimapColor || '#ffd28a';
+          mmCtx.fill();
+        }
+
+        const { sx, sy } = worldToMM(shop.ownerPos.x, shop.ownerPos.z, playerX, playerZ);
+        if (sx < 0 || sx > MM_SIZE || sy < 0 || sy > MM_SIZE) continue;
+        mmCtx.beginPath();
+        mmCtx.arc(sx, sy, shop.crowdMarkers ? 5 : 3.5, 0, Math.PI * 2);
+        mmCtx.fillStyle = shop.minimapColor || '#ffd28a';
+        mmCtx.fill();
+      }
+
+      for (const v of vehicles) {
+        const { sx, sy } = worldToMM(v.group.position.x, v.group.position.z, playerX, playerZ);
+        if (sx < 0 || sx > MM_SIZE || sy < 0 || sy > MM_SIZE) continue;
+        mmCtx.beginPath();
+        mmCtx.arc(sx, sy, 3, 0, Math.PI * 2);
+        mmCtx.fillStyle = v.kind === 'car' ? '#76a7ff' : '#ff6b6b';
+        mmCtx.fill();
+      }
+
+      // Race start — "R" marker
+      {
+        const { sx: szx, sy: szy } = worldToMM(raceTrack.startZone.x, raceTrack.startZone.z, playerX, playerZ);
+        if (szx >= 0 && szx <= MM_SIZE && szy >= 0 && szy <= MM_SIZE) {
+          mmCtx.save();
+          mmCtx.font = 'bold 11px sans-serif';
+          mmCtx.textAlign = 'center';
+          mmCtx.textBaseline = 'middle';
+          mmCtx.fillStyle = '#ffe040';
+          mmCtx.shadowColor = 'rgba(0,0,0,0.8)';
+          mmCtx.shadowBlur = 3;
+          mmCtx.fillText('R', szx, szy);
+          mmCtx.restore();
+        }
+      }
+
+      if (cityInfo.rocket) {
+        const { sx, sy } = worldToMM(cityInfo.rocket.x, cityInfo.rocket.z, playerX, playerZ);
+        if (sx >= 0 && sx <= MM_SIZE && sy >= 0 && sy <= MM_SIZE) {
+          mmCtx.save();
+          mmCtx.translate(sx, sy);
+          mmCtx.beginPath();
+          mmCtx.moveTo(0, -7);
+          mmCtx.lineTo(5, 5);
+          mmCtx.lineTo(0, 2);
+          mmCtx.lineTo(-5, 5);
+          mmCtx.closePath();
+          mmCtx.fillStyle = '#ff5b45';
+          mmCtx.fill();
+          mmCtx.strokeStyle = '#ffd28a';
+          mmCtx.lineWidth = 1.5;
+          mmCtx.stroke();
+          mmCtx.restore();
+        }
+      }
+
+      if (cityInfo.airplaneLandmark) {
+        const { sx, sy } = worldToMM(cityInfo.airplaneLandmark.x, cityInfo.airplaneLandmark.z, playerX, playerZ);
+        if (sx >= 0 && sx <= MM_SIZE && sy >= 0 && sy <= MM_SIZE) {
+          mmCtx.save();
+          mmCtx.translate(sx, sy);
+          mmCtx.beginPath();
+          mmCtx.moveTo(0, -7);
+          mmCtx.lineTo(5, 5);
+          mmCtx.lineTo(0, 2);
+          mmCtx.lineTo(-5, 5);
+          mmCtx.closePath();
+          mmCtx.fillStyle = '#60c8ff';
+          mmCtx.fill();
+          mmCtx.strokeStyle = '#ffffff';
+          mmCtx.lineWidth = 1.5;
+          mmCtx.stroke();
+          mmCtx.restore();
+        }
+      }
+    } // end else (normal mode)
+
+    // Player dot — always drawn
     mmCtx.beginPath();
     mmCtx.arc(MM_R, MM_R, 5, 0, Math.PI * 2);
     mmCtx.fillStyle = '#4af0a0';
@@ -369,6 +438,8 @@ function init() {
   let dialogOpen = false;
   let saleAvailable = false;
   let currentDialogIsTravelAgent = false;
+  let currentDialogIsEverestReturn = false;
+  let inEverest = false;
   let currentSiteUrl = DEFAULT_SITE_URL;
   let currentSiteLabel = DEFAULT_SITE_LABEL;
   let currentSiteTitle = 'Sale';
@@ -396,6 +467,46 @@ function init() {
   }
   if (saleIframeClose) saleIframeClose.addEventListener('click', closeSaleIframe);
 
+  function applyEverestAtmosphere() {
+    const e = everestInfo.env;
+    scene.fog.color.setHex(e.fogColor);
+    scene.fog.density = e.fogDensity;
+    scene.background = makeSkyTexture(e.skyTopColor, e.skyHorizonColor);
+    envInfo.ambient.color.setHex(e.ambientColor);
+    envInfo.ambient.intensity = e.ambientIntensity;
+    envInfo.sun.color.setHex(e.sunColor);
+    envInfo.hemi.color.setHex(e.skyTopColor);
+  }
+
+  function restoreCityAtmosphere() {
+    scene.fog.color.setHex(CONFIG.skyHorizonColor);
+    scene.fog.density = CONFIG.fogDensity;
+    scene.background = makeSkyTexture(CONFIG.skyTopColor, CONFIG.skyHorizonColor);
+    envInfo.ambient.color.setHex(CONFIG.ambientColor);
+    envInfo.ambient.intensity = CONFIG.ambientIntensity;
+    envInfo.sun.color.setHex(CONFIG.sunColor);
+    envInfo.hemi.color.setHex(CONFIG.skyTopColor);
+  }
+
+  function teleportToEverest() {
+    character.group.position.set(everestInfo.spawnX, CONFIG.city.sidewalkHeight, everestInfo.spawnZ);
+    character.group.rotation.y = Math.PI;
+    cameraRig.state.yaw = Math.PI;
+    applyEverestAtmosphere();
+    inEverest = true;
+    closeTravelPanel();
+    closeDialog();
+  }
+
+  function returnToCity() {
+    character.group.position.set(cityInfo.spawn.x, CONFIG.city.sidewalkHeight, cityInfo.spawn.z);
+    character.group.rotation.y = 0;
+    cameraRig.state.yaw = 0;
+    restoreCityAtmosphere();
+    inEverest = false;
+    closeDialog();
+  }
+
   const travelPanel = document.getElementById('travel-panel');
   const travelClose = document.getElementById('travel-close');
   let travelOpen = false;
@@ -416,11 +527,12 @@ function init() {
   document.querySelectorAll('.travel-dest').forEach(el => {
     el.addEventListener('click', () => {
       const dest = el.dataset.dest;
-      const worldDests = new Set(['niagara', 'everest', 'serengeti', 'bahamas', 'amazon']);
-      if (worldDests.has(dest)) {
+      if (dest === 'everest') { teleportToEverest(); return; }
+      const comingSoon = new Set(['niagara', 'serengeti', 'bahamas', 'amazon']);
+      if (comingSoon.has(dest)) {
         closeTravelPanel();
         closeDialog();
-        const names = { niagara: 'Niagara Falls', everest: 'Mount Everest', serengeti: 'Serengeti', bahamas: 'The Bahamas', amazon: 'Amazon Rainforest' };
+        const names = { niagara: 'Niagara Falls', serengeti: 'Serengeti', bahamas: 'The Bahamas', amazon: 'Amazon Rainforest' };
         const hint = document.getElementById('hud-prompt');
         if (hint) { hint.textContent = `✈️ ${names[dest]} — coming soon!`; setTimeout(() => { hint.textContent = ''; }, 3000); }
         return;
@@ -441,10 +553,13 @@ function init() {
     currentSiteTitle = shop.siteTitle || `${shop.name} Sale`;
     saleAvailable = true;
     currentDialogIsTravelAgent = !!shop.isTravelAgent;
+    currentDialogIsEverestReturn = !!shop.isEverestReturn;
     if (dialogSaleHint) {
-      dialogSaleHint.textContent = shop.isTravelAgent
-        ? 'Press F for travel destinations'
-        : `Press F to open ${currentSiteLabel}`;
+      dialogSaleHint.textContent = shop.isEverestReturn
+        ? 'Press F to return to the city'
+        : shop.isTravelAgent
+          ? 'Press F for travel destinations'
+          : `Press F to open ${currentSiteLabel}`;
       dialogSaleHint.style.display = 'block';
     }
     playDialogOpen();
@@ -453,6 +568,7 @@ function init() {
     dialogOpen = false;
     saleAvailable = false;
     currentDialogIsTravelAgent = false;
+    currentDialogIsEverestReturn = false;
     currentSiteUrl = DEFAULT_SITE_URL;
     currentSiteLabel = DEFAULT_SITE_LABEL;
     currentSiteTitle = 'Sale';
@@ -611,7 +727,9 @@ function init() {
     if (e.code === 'Escape' && (dialogOpen || travelOpen)) { closeDialog(); closeTravelPanel(); }
     if (e.code === 'KeyF' && dialogOpen && saleAvailable && !e.repeat) {
       e.preventDefault();
-      if (currentDialogIsTravelAgent) {
+      if (currentDialogIsEverestReturn) {
+        returnToCity();
+      } else if (currentDialogIsTravelAgent) {
         openTravelPanel();
       } else {
         openSaleIframe(dialogName ? dialogName.textContent : 'Shop');
@@ -620,6 +738,12 @@ function init() {
     if (e.code === 'KeyL' && rocketState === 'entered' && !e.repeat) {
       e.preventDefault();
       launchRocket();
+    }
+    if (e.code === 'KeyX' && raceActive && !e.repeat) {
+      e.preventDefault();
+      raceManager.reset();
+      raceActive = false;
+      if (hudRace) hudRace.style.display = 'none';
     }
     if (playerMode === 'drive' && currentVehicle && !e.repeat) {
       if (e.code === 'KeyT') {
@@ -677,6 +801,8 @@ function init() {
       const lap = Math.min(rs.laps[0] + 1, rs.totalLaps);
       if (hudRaceLapVal) hudRaceLapVal.textContent = `LAP ${lap}/${rs.totalLaps}`;
       if (hudRacePosVal) hudRacePosVal.textContent = `P${rs.position}`;
+      const cpEl = document.getElementById('race-cp-val');
+      if (cpEl) cpEl.textContent = `CP ${rs.cpsDone}/${rs.totalCps}`;
       const t = rs.raceTime;
       const m = Math.floor(t / 60);
       const s = (t % 60).toFixed(1);
@@ -710,6 +836,8 @@ function init() {
       const v = currentVehicle;
       const input = controller.getInput();
       input.allowAutoReverse = true;
+      // Block throttle during race countdown
+      if (raceActive && raceManager.isCountdown()) input.forward = Math.min(0, input.forward);
       if (v.state.gear === 7 && input.forward > 0) {
         setVehicleGear(v, 1);
       }
@@ -856,7 +984,9 @@ function init() {
       } else if (rocketState === 'launching') {
         promptMsg = 'Launching';
       } else if (playerMode === 'drive') {
-        if (currentNearRace && raceManager.getState().state === 'idle') {
+        if (raceActive) {
+          promptMsg = 'Press X to exit race';
+        } else if (currentNearRace && raceManager.getState().state === 'idle') {
           promptMsg = 'Press E to start race';
         } else if (performance.now() < dismountHintUntil) {
           promptMsg = `Press E to get out · T ${automaticTransmission ? 'manual' : 'automatic'}`;
