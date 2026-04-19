@@ -12,8 +12,10 @@ import { createCar } from './car.js';
 import {
   attachAudioUnlock, playDialogOpen,
   startEngine, stopEngine, setEngineThrottle,
-  playGearShift, setMuted,
+  playGearShift, setMuted, setVolume, getVolumes,
+  playRocketLaunch,
 } from './audio.js';
+import { createRaceTrack, createRaceManager } from './race.js';
 
 function init() {
   const canvas = document.getElementById('gameCanvas');
@@ -90,6 +92,13 @@ function init() {
   scene.add(car.group);
 
   const vehicles = [motorcycle, car];
+
+  // Race track outside the city
+  const raceTrack = createRaceTrack(scene, 0, 0);
+  const raceManager = createRaceManager(scene, raceTrack);
+  let currentNearRace = false;
+  let raceActive = false;
+  let raceFinishTimeout = null;
 
   attachAudioUnlock(canvas);
 
@@ -171,6 +180,43 @@ function init() {
       mmCtx.fill();
     }
 
+    // Race track outline
+    {
+      const wpts = raceTrack.waypoints;
+      mmCtx.strokeStyle = 'rgba(200,200,60,0.4)';
+      mmCtx.lineWidth = 1;
+      mmCtx.beginPath();
+      for (let i = 0; i < wpts.length; i++) {
+        const { sx, sy } = worldToMM(wpts[i].x, wpts[i].z, playerX, playerZ);
+        if (i === 0) mmCtx.moveTo(sx, sy);
+        else mmCtx.lineTo(sx, sy);
+      }
+      mmCtx.closePath();
+      mmCtx.stroke();
+
+      // Start zone dot
+      const { sx: szx, sy: szy } = worldToMM(raceTrack.startZone.x, raceTrack.startZone.z, playerX, playerZ);
+      if (szx >= 0 && szx <= MM_SIZE && szy >= 0 && szy <= MM_SIZE) {
+        mmCtx.beginPath();
+        mmCtx.arc(szx, szy, 3.5, 0, Math.PI * 2);
+        mmCtx.fillStyle = 'rgba(255,220,50,0.7)';
+        mmCtx.fill();
+      }
+    }
+
+    // AI car dots (during active race)
+    if (raceActive) {
+      const rsAI = raceManager.getState();
+      for (const car of rsAI.aiCars) {
+        const { sx, sy } = worldToMM(car.x, car.z, playerX, playerZ);
+        if (sx < 0 || sx > MM_SIZE || sy < 0 || sy > MM_SIZE) continue;
+        mmCtx.beginPath();
+        mmCtx.arc(sx, sy, 2.5, 0, Math.PI * 2);
+        mmCtx.fillStyle = `#${car.color.toString(16).padStart(6, '0')}`;
+        mmCtx.fill();
+      }
+    }
+
     if (cityInfo.rocket) {
       const { sx, sy } = worldToMM(cityInfo.rocket.x, cityInfo.rocket.z, playerX, playerZ);
       if (sx >= 0 && sx <= MM_SIZE && sy >= 0 && sy <= MM_SIZE) {
@@ -231,6 +277,13 @@ function init() {
   const saleIframeClose = document.getElementById('sale-iframe-close');
   const saleIframeTitle = document.getElementById('sale-iframe-title');
   const launchFade = document.getElementById('launch-fade');
+  const hudRace = document.getElementById('race-hud');
+  const hudRaceCountdown = document.getElementById('race-countdown');
+  const hudRaceStats = document.getElementById('race-stats');
+  const hudRaceLapVal = document.getElementById('race-lap-val');
+  const hudRacePosVal = document.getElementById('race-pos-val');
+  const hudRaceTimeVal = document.getElementById('race-time-val');
+  const hudRaceFinish = document.getElementById('race-finish-msg');
   const DEFAULT_SITE_URL = 'http://127.0.0.1:8788/business/132';
   const DEFAULT_SITE_LABEL = 'WhatsLocal';
   const SPACE_GAME_URL = 'https://expanse-runner-3d-spacegame.netlify.app';
@@ -252,6 +305,52 @@ function init() {
       localStorage.setItem('cityWalkMuted', String(muted));
       setMuted(muted);
       updateMuteButton();
+    });
+  }
+
+  // Sound settings panel
+  const VOLUME_CATEGORIES = [
+    { key: 'engine',  label: 'Engine' },
+    { key: 'ambient', label: 'Background' },
+    { key: 'traffic', label: 'Traffic' },
+    { key: 'sfx',     label: 'SFX' },
+  ];
+  const savedVolumes = JSON.parse(localStorage.getItem('cityWalkVolumes') || '{}');
+  for (const { key } of VOLUME_CATEGORIES) {
+    if (savedVolumes[key] != null) setVolume(key, savedVolumes[key]);
+  }
+  function saveVolumes() {
+    localStorage.setItem('cityWalkVolumes', JSON.stringify(getVolumes()));
+  }
+
+  const soundPanel = document.getElementById('sound-panel');
+  const soundPanelBtn = document.getElementById('hud-sound-settings');
+  if (soundPanelBtn && soundPanel) {
+    soundPanelBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const open = soundPanel.style.display === 'block';
+      soundPanel.style.display = open ? 'none' : 'block';
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'Escape' && soundPanel.style.display === 'block') {
+        soundPanel.style.display = 'none';
+      }
+    });
+    soundPanel.querySelectorAll('input[type=range]').forEach((slider) => {
+      const cat = slider.dataset.cat;
+      const valEl = document.getElementById(`vol-${cat}-val`);
+      const stored = savedVolumes[cat];
+      if (stored != null) slider.value = stored;
+      const update = () => {
+        if (valEl) valEl.textContent = `${Math.round(slider.value * 100)}%`;
+      };
+      update();
+      slider.addEventListener('input', () => {
+        setVolume(cat, parseFloat(slider.value));
+        update();
+        saveVolumes();
+      });
     });
   }
 
@@ -426,6 +525,7 @@ function init() {
       launchFade.style.display = 'flex';
       launchFade.style.opacity = '0';
     }
+    playRocketLaunch();
   }
 
   controller.onInteract(() => {
@@ -433,6 +533,12 @@ function init() {
 
     if (currentNearRocket && rocketState === 'idle') {
       enterRocket();
+      return;
+    }
+
+    if (currentNearRace && raceManager.getState().state === 'idle' && playerMode === 'drive') {
+      raceManager.start(currentVehicle);
+      raceActive = true;
       return;
     }
 
@@ -470,6 +576,20 @@ function init() {
         return;
       }
       if (automaticTransmission) return;
+      if (e.code === 'KeyW' && currentVehicle.state.gear === 7) {
+        setVehicleGear(currentVehicle, 1);
+        return;
+      }
+      if (e.code === 'KeyK') {
+        const cur = currentVehicle.state.gear;
+        if (cur < 6) setVehicleGear(currentVehicle, cur + 1);
+        return;
+      }
+      if (e.code === 'KeyJ') {
+        const cur = currentVehicle.state.gear;
+        if (cur > 1) setVehicleGear(currentVehicle, cur - 1);
+        return;
+      }
       const map = { Digit1: 1, Digit2: 2, Digit3: 3, Digit4: 4, Digit5: 5, Digit6: 6, Digit7: 7 };
       const g = map[e.code];
       if (g != null) {
@@ -485,6 +605,41 @@ function init() {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
   });
 
+  function updateRaceHUD(rs) {
+    if (!hudRace) return;
+    if (rs.state === 'idle') { hudRace.style.display = 'none'; return; }
+    hudRace.style.display = 'block';
+
+    if (rs.state === 'countdown') {
+      if (hudRaceCountdown) {
+        hudRaceCountdown.textContent = rs.countdown > 0 ? String(rs.countdown) : 'GO!';
+        hudRaceCountdown.style.display = 'block';
+      }
+      if (hudRaceStats) hudRaceStats.style.display = 'none';
+    } else {
+      if (hudRaceCountdown) hudRaceCountdown.style.display = 'none';
+      if (hudRaceStats) hudRaceStats.style.display = 'flex';
+      const lap = Math.min(rs.laps[0] + 1, rs.totalLaps);
+      if (hudRaceLapVal) hudRaceLapVal.textContent = `LAP ${lap}/${rs.totalLaps}`;
+      if (hudRacePosVal) hudRacePosVal.textContent = `P${rs.position}`;
+      const t = rs.raceTime;
+      const m = Math.floor(t / 60);
+      const s = (t % 60).toFixed(1);
+      if (hudRaceTimeVal) hudRaceTimeVal.textContent = `${m}:${s.padStart(4, '0')}`;
+    }
+
+    if (rs.state === 'finished') {
+      const place = rs.finishOrder.indexOf(0) + 1;
+      const suffix = ['st', 'nd', 'rd', 'th'][Math.min(place - 1, 3)];
+      if (hudRaceFinish) {
+        hudRaceFinish.textContent = `FINISHED ${place}${suffix}`;
+        hudRaceFinish.style.display = 'block';
+      }
+    } else {
+      if (hudRaceFinish) hudRaceFinish.style.display = 'none';
+    }
+  }
+
   let fpsAccumTime = 0;
   let fpsAccumFrames = 0;
   const clock = new THREE.Clock();
@@ -499,8 +654,8 @@ function init() {
     } else if (playerMode === 'drive' && currentVehicle) {
       const v = currentVehicle;
       const input = controller.getInput();
-      input.allowAutoReverse = automaticTransmission;
-      if (automaticTransmission && v.state.gear === 7 && input.forward > 0) {
+      input.allowAutoReverse = true;
+      if (v.state.gear === 7 && input.forward > 0) {
         setVehicleGear(v, 1);
       }
       v.drive(dt, input);
@@ -522,6 +677,7 @@ function init() {
       const rpmFrac = v.state.stalled
         ? 0
         : Math.max(0, Math.min(1, (rpm - idle) / (redline - idle)));
+      startEngine();
       setEngineThrottle(rpmFrac);
     } else if (playerMode === 'rocket' && cityInfo.rocket) {
       const rocketLocalY = cityInfo.rocket.rocket?.position.y || 0;
@@ -613,6 +769,31 @@ function init() {
     }
     currentNearRocket = nearRocket;
 
+    // Race proximity (must be driving)
+    if (playerMode === 'drive' && currentVehicle) {
+      const sz = raceTrack.startZone;
+      const px = currentVehicle.group.position.x;
+      const pz = currentVehicle.group.position.z;
+      currentNearRace = distSq(px, pz, sz.x, sz.z) < sz.radius * sz.radius;
+    } else {
+      currentNearRace = false;
+    }
+
+    // Update race
+    if (raceActive) {
+      raceManager.update(dt, playerMode === 'drive' ? currentVehicle : null);
+      const rs = raceManager.getState();
+      updateRaceHUD(rs);
+      if (rs.state === 'finished') {
+        raceActive = false;
+        clearTimeout(raceFinishTimeout);
+        raceFinishTimeout = setTimeout(() => {
+          raceManager.reset();
+          if (hudRace) hudRace.style.display = 'none';
+        }, 5000);
+      }
+    }
+
     let promptMsg = null;
     if (!dialogOpen) {
       if (rocketState === 'entered') {
@@ -620,7 +801,9 @@ function init() {
       } else if (rocketState === 'launching') {
         promptMsg = 'Launching';
       } else if (playerMode === 'drive') {
-        if (performance.now() < dismountHintUntil) {
+        if (currentNearRace && raceManager.getState().state === 'idle') {
+          promptMsg = 'Press E to start race';
+        } else if (performance.now() < dismountHintUntil) {
           promptMsg = `Press E to get out · T ${automaticTransmission ? 'manual' : 'automatic'}`;
         }
       } else if (nearRocket) {
@@ -655,7 +838,7 @@ function init() {
       if (hudTachCover) hudTachCover.style.width = `${(1 - rpmPct) * 100}%`;
       if (hudRpmNum) hudRpmNum.textContent = `${Math.round(rpm)} rpm`;
       if (hudSpeedNum) {
-        const kmh = Math.abs(v.state.speed) * 3.6 * 4;
+        const kmh = Math.abs(v.state.speed) * 2.86;
         hudSpeedNum.textContent = `${Math.round(kmh)} km/h`;
       }
 
