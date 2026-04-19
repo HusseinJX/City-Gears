@@ -416,12 +416,15 @@ function init() {
   document.querySelectorAll('.travel-dest').forEach(el => {
     el.addEventListener('click', () => {
       const dest = el.dataset.dest;
-      let tx = cityInfo.spawn.x, tz = cityInfo.spawn.z;
-      if (dest === 'rocket' && cityInfo.rocket) { tx = cityInfo.rocket.x; tz = cityInfo.rocket.z + 6; }
-      else if (dest === 'park') { tx = cityInfo.spawn.x - 10; tz = cityInfo.spawn.z - 10; }
-      else if (dest === 'center') { tx = cityInfo.spawn.x; tz = cityInfo.spawn.z; }
-      else if (dest === 'airport' && cityInfo.airplaneLandmark) { tx = cityInfo.airplaneLandmark.x - 8; tz = cityInfo.airplaneLandmark.z; }
-      character.group.position.set(tx, CONFIG.city.sidewalkHeight, tz);
+      const worldDests = new Set(['niagara', 'everest', 'serengeti', 'bahamas', 'amazon']);
+      if (worldDests.has(dest)) {
+        closeTravelPanel();
+        closeDialog();
+        const names = { niagara: 'Niagara Falls', everest: 'Mount Everest', serengeti: 'Serengeti', bahamas: 'The Bahamas', amazon: 'Amazon Rainforest' };
+        const hint = document.getElementById('hud-prompt');
+        if (hint) { hint.textContent = `✈️ ${names[dest]} — coming soon!`; setTimeout(() => { hint.textContent = ''; }, 3000); }
+        return;
+      }
       closeTravelPanel();
       closeDialog();
     });
