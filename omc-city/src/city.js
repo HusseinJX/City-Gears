@@ -253,7 +253,7 @@ export function createCity(scene) {
 
   const shops = generateShops(group, blocks);
   shops.push(addSpaceAgeVisionAttraction(group, spawnParkBlock, spawn));
-  shops.push(addCityHall(group, spawn, cityHallBlock));
+  shops.push(addCityHall(group, spawn, cityHallBlock, buildingAABBs));
   const rocket = addRocketLaunchSite(group, spaceFacilityBlock, spawn);
   const airplaneLandmark = addAirplaneBuilding(group, spawnParkBlock, spawn, buildingAABBs);
   if (airplaneLandmark.shop) shops.push(airplaneLandmark.shop);
@@ -1248,7 +1248,7 @@ function addAirplaneBuilding(group, block, spawn, AABBs) {
 }
 
 // ---------- City Hall (placed next to spawn) ----------
-function addCityHall(group, spawn, nearbyBlock) {
+function addCityHall(group, spawn, nearbyBlock, buildingAABBs) {
   const C = CONFIG.city;
   const baseY = C.sidewalkHeight;
   const x = nearbyBlock ? nearbyBlock.x : spawn.x + 20;
@@ -1258,101 +1258,229 @@ function addCityHall(group, spawn, nearbyBlock) {
   hallWrapper.position.set(x, baseY, z);
   group.add(hallWrapper);
 
-  // Classical main building body — long and grand
-  const hallW = 12;
-  const hallD = 7;
-  const hallH = 8;
-  const hallMat = new THREE.MeshLambertMaterial({ color: 0xf5f5f0 });
-  const hall = new THREE.Mesh(new THREE.BoxGeometry(hallW, hallH, hallD), hallMat);
+  // Materials
+  const ivory  = new THREE.MeshLambertMaterial({ color: 0xf0ede4 });
+  const white  = new THREE.MeshLambertMaterial({ color: 0xfafaf6 });
+  const stone  = new THREE.MeshLambertMaterial({ color: 0xd5d0c4 });
+  const winMat = new THREE.MeshLambertMaterial({ color: 0x4a7a9a, emissive: 0x1a3a5a, emissiveIntensity: 0.5 });
+  const darkDoor = new THREE.MeshLambertMaterial({ color: 0x3a3028 });
+  const domeMat  = new THREE.MeshLambertMaterial({ color: 0x7a9080 }); // verdigris patina
+  const gold     = new THREE.MeshLambertMaterial({ color: 0xd4af37, emissive: 0x8a6a10, emissiveIntensity: 0.4 });
+  const redFlag  = new THREE.MeshLambertMaterial({ color: 0xcc2222 });
+  const poleGray = new THREE.MeshLambertMaterial({ color: 0x808070 });
+
+  // ── MAIN BUILDING BODY ──────────────────────────────────────────
+  const hallW = 16, hallD = 8, hallH = 10;
+  const hall = new THREE.Mesh(new THREE.BoxGeometry(hallW, hallH, hallD), ivory);
   hall.position.y = hallH / 2;
-  hall.castShadow = true;
-  hall.receiveShadow = true;
+  hall.castShadow = true; hall.receiveShadow = true;
   hallWrapper.add(hall);
 
-  // Grand columned portico — many classical columns across front
-  const columnH = hallH * 0.9;
-  const columnR = 0.35;
-  const columnMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-  const columnGeo = new THREE.CylinderGeometry(columnR, columnR, columnH, 10);
-  const numColumns = 10;
-  const colSpacing = hallW / (numColumns + 1);
-  for (let i = 1; i <= numColumns; i++) {
-    const col = new THREE.Mesh(columnGeo, columnMat);
-    col.position.set(-hallW / 2 + colSpacing * i, columnH / 2, hallD / 2 + 0.4);
-    col.castShadow = true;
-    hallWrapper.add(col);
+  // Base plinth strip
+  const basePlinth = new THREE.Mesh(new THREE.BoxGeometry(hallW + 0.4, 0.55, hallD + 0.4), stone);
+  basePlinth.position.y = 0.275;
+  hallWrapper.add(basePlinth);
+
+  // Top cornice band
+  const topCornice = new THREE.Mesh(new THREE.BoxGeometry(hallW + 0.5, 0.6, hallD + 0.5), stone);
+  topCornice.position.y = hallH + 0.3;
+  topCornice.castShadow = true;
+  hallWrapper.add(topCornice);
+
+  // Windows on main building front (flanking portico opening)
+  const frontWinZ = hallD / 2 + 0.06;
+  for (const side of [-1, 1]) {
+    for (let row = 0; row < 3; row++) {
+      for (let col = 0; col < 2; col++) {
+        const wx = side * (hallW / 2 - 1.6 - col * 2.5);
+        const wy = 2.2 + row * 2.8;
+        const win = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.6, 0.1), winMat);
+        win.position.set(wx, wy, frontWinZ);
+        hallWrapper.add(win);
+        const winPed = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.22, 0.1), stone);
+        winPed.position.set(wx, wy + 1.0, frontWinZ);
+        hallWrapper.add(winPed);
+      }
+    }
   }
 
-  // Triangular pediment above columns
-  const pedMat = new THREE.MeshLambertMaterial({ color: 0xe8e8e0 });
-  const pediment = new THREE.Mesh(new THREE.BoxGeometry(hallW + 1, 0.4, hallD * 0.3), pedMat);
-  pediment.position.set(0, hallH + 0.2, hallD / 2 + 0.15);
+  // ── PORTICO & GRAND STAIRCASE ────────────────────────────────────
+  const porticoW = 9, porticoD = 4.2;
+  const numSteps = 4, stepH = 0.24, stepD = 0.62;
+  const platformH = numSteps * stepH; // = 0.96 — portico floor height
+  const porticoFrontZ = hallD / 2 + porticoD; // local Z of column face
+
+  // Raised portico floor platform
+  const platform = new THREE.Mesh(new THREE.BoxGeometry(porticoW + 0.6, platformH, porticoD + 0.1), stone);
+  platform.position.set(0, platformH / 2, hallD / 2 + porticoD / 2);
+  platform.castShadow = true;
+  hallWrapper.add(platform);
+
+  // Grand stairs (s=0 top, s=numSteps-1 bottom)
+  for (let s = 0; s < numSteps; s++) {
+    const sw = porticoW + 1.0 + s * 1.1;
+    const sy = stepH * (numSteps - 1 - s) + stepH / 2; // steps descend as s increases
+    const sz = porticoFrontZ + stepD * (s + 0.5);
+    const step = new THREE.Mesh(new THREE.BoxGeometry(sw, stepH, stepD), stone);
+    step.position.set(0, sy, sz);
+    step.castShadow = true;
+    hallWrapper.add(step);
+  }
+
+  // ── COLUMNS ─────────────────────────────────────────────────────
+  const colH = 7.8, colR = 0.52, numCols = 6;
+  const colSpread = porticoW * 0.84;
+  const colBaseY = platformH;
+  const colGeo = new THREE.CylinderGeometry(colR * 0.82, colR, colH, 14);
+
+  for (let i = 0; i < numCols; i++) {
+    const t = i / (numCols - 1) - 0.5;
+    const cx = t * colSpread;
+    const cz = porticoFrontZ;
+
+    const plinth = new THREE.Mesh(new THREE.BoxGeometry(colR * 2.4, 0.35, colR * 2.4), white);
+    plinth.position.set(cx, colBaseY + 0.175, cz);
+    hallWrapper.add(plinth);
+
+    const col = new THREE.Mesh(colGeo, white);
+    col.position.set(cx, colBaseY + 0.35 + colH / 2, cz);
+    col.castShadow = true;
+    hallWrapper.add(col);
+
+    const capital = new THREE.Mesh(new THREE.BoxGeometry(colR * 2.8, 0.45, colR * 2.8), white);
+    capital.position.set(cx, colBaseY + 0.35 + colH + 0.225, cz);
+    hallWrapper.add(capital);
+  }
+
+  // ── ENTABLATURE ─────────────────────────────────────────────────
+  const entabY = colBaseY + 0.35 + colH + 0.45;
+  // Architrave
+  const architrave = new THREE.Mesh(new THREE.BoxGeometry(porticoW + 1.2, 0.7, 0.95), stone);
+  architrave.position.set(0, entabY + 0.35, porticoFrontZ);
+  hallWrapper.add(architrave);
+  // Frieze
+  const frieze = new THREE.Mesh(new THREE.BoxGeometry(porticoW + 1.2, 0.82, 0.75), ivory);
+  frieze.position.set(0, entabY + 0.7 + 0.41, porticoFrontZ);
+  hallWrapper.add(frieze);
+  // Cornice overhang
+  const porticoCornice = new THREE.Mesh(new THREE.BoxGeometry(porticoW + 2.1, 0.5, 1.2), stone);
+  porticoCornice.position.set(0, entabY + 0.7 + 0.82 + 0.25, porticoFrontZ);
+  porticoCornice.castShadow = true;
+  hallWrapper.add(porticoCornice);
+
+  // ── TRIANGULAR PEDIMENT ─────────────────────────────────────────
+  const pedTopY = entabY + 0.7 + 0.82 + 0.5;
+  const pedW  = porticoW + 2.1;
+  const pedH  = 2.1;
+  const pedDp = 1.0;
+  const pedShape = new THREE.Shape();
+  pedShape.moveTo(-pedW / 2, 0);
+  pedShape.lineTo( pedW / 2, 0);
+  pedShape.lineTo(0, pedH);
+  pedShape.closePath();
+  const pediment = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(pedShape, { depth: pedDp, bevelEnabled: false }),
+    stone
+  );
+  // rotation.y = PI flips the shape face to point in +Z (toward the viewer)
+  pediment.rotation.y = Math.PI;
+  pediment.position.set(0, pedTopY, porticoFrontZ);
   pediment.castShadow = true;
   hallWrapper.add(pediment);
 
-  // Row of tall arched windows/doors on front facade
-  const windowMat = new THREE.MeshLambertMaterial({ color: 0x4a7a9a, emissive: 0x1a3a5a, emissiveIntensity: 0.5 });
-  const numWindows = 9;
-  const winSpacing = hallW / (numWindows + 1);
-  for (let i = 1; i <= numWindows; i++) {
-    const win = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.6, 0.1), windowMat);
-    win.position.set(-hallW / 2 + winSpacing * i, 4.2, hallD / 2 + 0.05);
-    hallWrapper.add(win);
+  // ── MAIN DOOR (on building front face, behind columns) ───────────
+  const doorZ = hallD / 2 + 0.08;
+  const door = new THREE.Mesh(new THREE.BoxGeometry(2.3, 3.4, 0.15), darkDoor);
+  door.position.set(0, colBaseY + 1.85, doorZ);
+  hallWrapper.add(door);
+  const archTop = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.4, 0.14), stone);
+  archTop.position.set(0, colBaseY + 3.8, doorZ);
+  hallWrapper.add(archTop);
+  for (const side of [-1.4, 1.4]) {
+    const pilaster = new THREE.Mesh(new THREE.BoxGeometry(0.28, 3.4, 0.14), stone);
+    pilaster.position.set(side, colBaseY + 1.85, doorZ + 0.01);
+    hallWrapper.add(pilaster);
+  }
+  const transom = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.9, 0.12), winMat);
+  transom.position.set(0, colBaseY + 4.25, doorZ);
+  hallWrapper.add(transom);
+
+  // ── DRUM (rotunda base under dome) ──────────────────────────────
+  const drumBaseY = hallH + 0.6;
+  const drumR = 3.0, drumH = 3.2;
+  const drum = new THREE.Mesh(new THREE.CylinderGeometry(drumR, drumR + 0.22, drumH, 20), stone);
+  drum.position.set(0, drumBaseY + drumH / 2, 0);
+  drum.castShadow = true;
+  hallWrapper.add(drum);
+
+  // Colonnade on drum face
+  const dColGeo = new THREE.CylinderGeometry(0.17, 0.19, drumH * 0.87, 8);
+  for (let i = 0; i < 14; i++) {
+    const angle = (i / 14) * Math.PI * 2;
+    const dc = new THREE.Mesh(dColGeo, white);
+    dc.position.set(
+      Math.cos(angle) * (drumR - 0.1),
+      drumBaseY + drumH * 0.435,
+      Math.sin(angle) * (drumR - 0.1)
+    );
+    hallWrapper.add(dc);
   }
 
-  // Second row of smaller windows
-  for (let i = 1; i <= numWindows; i++) {
-    const win = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.2, 0.1), windowMat);
-    win.position.set(-hallW / 2 + winSpacing * i, 2.2, hallD / 2 + 0.05);
-    hallWrapper.add(win);
-  }
+  // Drum cornice ring
+  const dCornice = new THREE.Mesh(new THREE.CylinderGeometry(drumR + 0.52, drumR + 0.52, 0.44, 20), stone);
+  dCornice.position.set(0, drumBaseY + drumH + 0.22, 0);
+  dCornice.castShadow = true;
+  hallWrapper.add(dCornice);
 
-  // Grand domed cupola in center
-  const domeBotMat = new THREE.MeshLambertMaterial({ color: 0xc0c0b8 });
-  const domeBase = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.5, 0.6, 24), domeBotMat);
-  domeBase.position.set(0, hallH + 0.3, 0);
-  domeBase.castShadow = true;
-  hallWrapper.add(domeBase);
-
-  const domeMat = new THREE.MeshLambertMaterial({ color: 0xa8a89a });
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(2.0, 20, 16, 0, Math.PI * 2, 0, Math.PI / 2), domeMat);
-  dome.position.set(0, hallH + 1.5, 0);
+  // ── DOME ────────────────────────────────────────────────────────
+  const domeBaseY = drumBaseY + drumH + 0.44 + 0.12;
+  const domeR = 2.8;
+  const dome = new THREE.Mesh(
+    new THREE.SphereGeometry(domeR, 28, 20, 0, Math.PI * 2, 0, Math.PI / 2),
+    domeMat
+  );
+  dome.position.set(0, domeBaseY, 0);
   dome.castShadow = true;
   hallWrapper.add(dome);
 
-  // Gold spire on top
-  const spireMat = new THREE.MeshLambertMaterial({ color: 0xd4af37, emissive: 0x6a5a1a, emissiveIntensity: 0.4 });
-  const spire = new THREE.Mesh(new THREE.ConeGeometry(0.35, 2.2, 12), spireMat);
-  spire.position.set(0, hallH + 3.1, 0);
+  // ── LANTERN & GOLD SPIRE ────────────────────────────────────────
+  const lanternBaseY = domeBaseY + domeR + 0.05;
+  const lantern = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.65, 0.72, 12), stone);
+  lantern.position.set(0, lanternBaseY + 0.36, 0);
+  hallWrapper.add(lantern);
+
+  const spire = new THREE.Mesh(new THREE.ConeGeometry(0.42, 2.6, 12), gold);
+  spire.position.set(0, lanternBaseY + 0.72 + 1.3, 0);
   spire.castShadow = true;
   hallWrapper.add(spire);
 
-  // Flag poles on sides of dome
-  const flagPoleMat = new THREE.MeshLambertMaterial({ color: 0x606060 });
-  for (const side of [-1.8, 1.8]) {
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 3.5, 8), flagPoleMat);
-    pole.position.set(side, hallH + 1.8, 0);
-    pole.castShadow = true;
+  // ── FLAG POLES ──────────────────────────────────────────────────
+  for (const side of [-5.0, 5.0]) {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 4.2, 8), poleGray);
+    pole.position.set(side, hallH + 2.1, 0);
     hallWrapper.add(pole);
+    const flag = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.5, 0.05), redFlag);
+    flag.position.set(side + 0.47, hallH + 3.9, 0);
+    hallWrapper.add(flag);
   }
 
-  // Grand central arched entrance
-  const doorMat = new THREE.MeshLambertMaterial({ color: 0x3a3a36 });
-  const door = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.8, 0.12), doorMat);
-  door.position.set(0, 1.5, hallD / 2 + 0.06);
-  hallWrapper.add(door);
-
-  // Arched window above door
-  const archWin = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.0, 0.1), windowMat);
-  archWin.position.set(0, 4.2, hallD / 2 + 0.05);
-  hallWrapper.add(archWin);
+  // Register collision box for the full building footprint (includes portico)
+  // After rotation.y=PI the portico faces world -Z, back faces world +Z
+  if (buildingAABBs) {
+    buildingAABBs.push({
+      minX: x - hallW / 2 - 0.3,
+      maxX: x + hallW / 2 + 0.3,
+      minZ: z - (hallD / 2 + porticoD + numSteps * stepD),
+      maxZ: z + hallD / 2 + 0.3,
+    });
+  }
 
   // Rotate so entrance faces toward center of park
   hallWrapper.rotation.y = Math.PI;
 
-  // Mayor/clerk NPC in front of entrance (center of park)
+  // Mayor/clerk NPC in front of entrance
   const npcX = x;
-  const npcZ = z - (hallD / 2 + 1.5);
+  const npcZ = z - (hallD / 2 + porticoD + numSteps * stepD + 2.5);
   const npc = makeCrowdPerson(0x1a5a9a, 0x2a2a3a, 0x4a4a5a);
   npc.position.set(npcX, baseY + 0.08, npcZ);
   npc.rotation.y = Math.PI * 0.5;
@@ -1361,10 +1489,11 @@ function addCityHall(group, spawn, nearbyBlock) {
 
   return {
     name: 'City Hall',
-    dialog: 'Welcome to City Hall — the heart of civic administration. Here you can find information about city services and events.',
+    dialog: 'Welcome to City Hall — the seat of civic government. The grand rotunda awaits inside. Press F to enter.',
     ownerPos: { x: npcX, z: npcZ },
-    interactionRadius: 5.0,
-    prompt: 'Press E to visit City Hall',
+    interactionRadius: 6.0,
+    prompt: 'Press E — City Hall',
     minimapColor: '#76f7ff',
+    isCityHall: true,
   };
 }

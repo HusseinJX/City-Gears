@@ -17,6 +17,7 @@ import {
 } from './audio.js';
 import { createRaceTrack, createRaceManager } from './race.js';
 import { createEverest } from './everest.js';
+import { createCityHallInterior } from './cityhall-interior.js';
 import { makeSkyTexture } from './textures.js';
 
 function init() {
@@ -34,6 +35,8 @@ function init() {
   const cityInfo = createCity(scene);
   const everestInfo = createEverest(scene);
   cityInfo.shops.push(everestInfo.returnShop);
+  const cityHallInterior = createCityHallInterior(scene);
+  cityInfo.shops.push(cityHallInterior.returnShop);
   const propsInfo = createProps(scene, cityInfo);
 
   const character = createCharacter();
@@ -45,6 +48,7 @@ function init() {
   const cameraRig = createCameraRig(canvas);
 
   const buildingAABBs = cityInfo.buildingAABBs || [];
+  for (const aabb of cityHallInterior.wallAABBs) buildingAABBs.push(aabb);
   const propObstacles = propsInfo.obstacles || [];
   const isBlockedStatic = (x, z, r) => {
     for (let i = 0; i < buildingAABBs.length; i++) {
@@ -439,7 +443,10 @@ function init() {
   let saleAvailable = false;
   let currentDialogIsTravelAgent = false;
   let currentDialogIsEverestReturn = false;
+  let currentDialogIsCityHallReturn = false;
+  let currentDialogIsCityHallEnter = false;
   let inEverest = false;
+  let inCityHall = false;
   let currentSiteUrl = DEFAULT_SITE_URL;
   let currentSiteLabel = DEFAULT_SITE_LABEL;
   let currentSiteTitle = 'Sale';
@@ -504,6 +511,23 @@ function init() {
     cameraRig.state.yaw = 0;
     restoreCityAtmosphere();
     inEverest = false;
+    inCityHall = false;
+    closeDialog();
+  }
+
+  function teleportToCityHall() {
+    const e = cityHallInterior.env;
+    character.group.position.set(cityHallInterior.spawnX, CONFIG.city.sidewalkHeight, cityHallInterior.spawnZ);
+    character.group.rotation.y = 0;   // face into the room (+Z)
+    cameraRig.state.yaw = 0;
+    cameraRig.state.pitch = -0.2;
+    scene.fog.color.setHex(e.fogColor);
+    scene.fog.density = e.fogDensity;
+    scene.background = makeSkyTexture(e.skyTopColor, e.skyHorizonColor);
+    envInfo.ambient.color.setHex(e.ambientColor);
+    envInfo.ambient.intensity = e.ambientIntensity;
+    envInfo.sun.color.setHex(e.sunColor);
+    inCityHall = true;
     closeDialog();
   }
 
@@ -554,12 +578,16 @@ function init() {
     saleAvailable = true;
     currentDialogIsTravelAgent = !!shop.isTravelAgent;
     currentDialogIsEverestReturn = !!shop.isEverestReturn;
+    currentDialogIsCityHallReturn = !!shop.isCityHallReturn;
+    currentDialogIsCityHallEnter = !!shop.isCityHall;
     if (dialogSaleHint) {
-      dialogSaleHint.textContent = shop.isEverestReturn
+      dialogSaleHint.textContent = (shop.isEverestReturn || shop.isCityHallReturn)
         ? 'Press F to return to the city'
-        : shop.isTravelAgent
-          ? 'Press F for travel destinations'
-          : `Press F to open ${currentSiteLabel}`;
+        : shop.isCityHall
+          ? 'Press F to enter City Hall'
+          : shop.isTravelAgent
+            ? 'Press F for travel destinations'
+            : `Press F to open ${currentSiteLabel}`;
       dialogSaleHint.style.display = 'block';
     }
     playDialogOpen();
@@ -569,6 +597,8 @@ function init() {
     saleAvailable = false;
     currentDialogIsTravelAgent = false;
     currentDialogIsEverestReturn = false;
+    currentDialogIsCityHallReturn = false;
+    currentDialogIsCityHallEnter = false;
     currentSiteUrl = DEFAULT_SITE_URL;
     currentSiteLabel = DEFAULT_SITE_LABEL;
     currentSiteTitle = 'Sale';
@@ -727,8 +757,10 @@ function init() {
     if (e.code === 'Escape' && (dialogOpen || travelOpen)) { closeDialog(); closeTravelPanel(); }
     if (e.code === 'KeyF' && dialogOpen && saleAvailable && !e.repeat) {
       e.preventDefault();
-      if (currentDialogIsEverestReturn) {
+      if (currentDialogIsEverestReturn || currentDialogIsCityHallReturn) {
         returnToCity();
+      } else if (currentDialogIsCityHallEnter) {
+        teleportToCityHall();
       } else if (currentDialogIsTravelAgent) {
         openTravelPanel();
       } else {
@@ -913,7 +945,7 @@ function init() {
     cameraRig.update(
       dt,
       playerMode === 'rocket' && cityInfo.rocket ? rocketCameraTarget : character.group,
-      playerMode === 'rocket' ? [] : cityInfo.obstacles
+      playerMode === 'rocket' ? [] : inCityHall ? cityHallInterior.wallMeshes : cityInfo.obstacles
     );
     if (playerMode === 'rocket' && cityInfo.rocket) {
       const t = rocketState === 'launching' ? (performance.now() - rocketLaunchStartedAt) / 1000 : 0;
