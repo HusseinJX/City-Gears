@@ -248,6 +248,7 @@ export function createCity(scene) {
 
   const shops = generateShops(group, blocks);
   shops.push(addSpaceAgeVisionAttraction(group, spawnParkBlock, spawn));
+  shops.push(addCityHall(group, spawn));
   const rocket = addRocketLaunchSite(group, spaceFacilityBlock, spawn);
   const airplaneLandmark = addAirplaneBuilding(group, spawnParkBlock, spawn, buildingAABBs);
   if (airplaneLandmark.shop) shops.push(airplaneLandmark.shop);
@@ -1239,4 +1240,110 @@ function addAirplaneBuilding(group, block, spawn, AABBs) {
   };
 
   return { x, z, shop };
+}
+
+// ---------- City Hall (placed next to spawn) ----------
+function addCityHall(group, spawn) {
+  const C = CONFIG.city;
+  const baseY = C.sidewalkHeight;
+  const x = spawn.x - 12;
+  const z = spawn.z + 8;
+
+  // Main building — wider and taller, classical proportions
+  const hallW = 8.5;
+  const hallD = 10;
+  const hallH = 7.5;
+  const hallMat = new THREE.MeshLambertMaterial({ color: 0xc4b5a0 });
+  const hall = new THREE.Mesh(new THREE.BoxGeometry(hallW, hallH, hallD), hallMat);
+  hall.position.set(x, baseY + hallH / 2, z);
+  hall.castShadow = true;
+  hall.receiveShadow = true;
+  group.add(hall);
+
+  // Large front columns (4 pillars)
+  const columnH = hallH * 0.85;
+  const columnR = 0.32;
+  const columnMat = new THREE.MeshLambertMaterial({ color: 0xd9ccc1 });
+  const columnGeo = new THREE.CylinderGeometry(columnR, columnR, columnH, 8);
+  const colOffsets = [
+    [-hallW / 2 + 1.2, hallD / 2 + 0.3],
+    [hallW / 2 - 1.2, hallD / 2 + 0.3],
+    [-hallW / 2 + 1.2, hallD / 2 - 0.8],
+    [hallW / 2 - 1.2, hallD / 2 - 0.8],
+  ];
+  colOffsets.forEach(([ox, oz]) => {
+    const col = new THREE.Mesh(columnGeo, columnMat);
+    col.position.set(x + ox, baseY + columnH / 2, z + oz);
+    col.castShadow = true;
+    group.add(col);
+  });
+
+  // Pediment (triangular roof detail)
+  const pedMat = new THREE.MeshLambertMaterial({ color: 0x5a4a3a });
+  const pediment = new THREE.Mesh(new THREE.BoxGeometry(hallW + 0.6, 0.3, hallD * 0.35), pedMat);
+  pediment.position.set(x, baseY + hallH + 0.15, z + hallD / 2 + 0.1);
+  pediment.castShadow = true;
+  group.add(pediment);
+
+  // Window grid on front
+  const windowMat = new THREE.MeshLambertMaterial({ color: 0x5fa8c8, emissive: 0x1a3a4a, emissiveIntensity: 0.3 });
+  const windowW = 1.1, windowH = 1.0;
+  const windowPositions = [
+    [-2.5, 5.5], [0, 5.5], [2.5, 5.5],
+    [-2.5, 3.8], [0, 3.8], [2.5, 3.8],
+    [-2.5, 2.1], [0, 2.1], [2.5, 2.1],
+  ];
+  windowPositions.forEach(([ox, oy]) => {
+    const win = new THREE.Mesh(new THREE.BoxGeometry(windowW, windowH, 0.08), windowMat);
+    win.position.set(x + ox, baseY + oy, z + hallD / 2 + 0.05);
+    group.add(win);
+  });
+
+  // Cupola (domed roof structure on top)
+  const cupolaBaseMat = new THREE.MeshLambertMaterial({ color: 0x3a4a5a });
+  const cupolaBase = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.0, 0.5, 16), cupolaBaseMat);
+  cupolaBase.position.set(x, baseY + hallH + 0.25, z);
+  cupolaBase.castShadow = true;
+  group.add(cupolaBase);
+
+  const cupola = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 12), new THREE.MeshLambertMaterial({ color: 0x4a6a8a }));
+  cupola.position.set(x, baseY + hallH + 1.2, z);
+  cupola.castShadow = true;
+  group.add(cupola);
+
+  const spire = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.6, 8), new THREE.MeshLambertMaterial({ color: 0x8a7a6a }));
+  spire.position.set(x, baseY + hallH + 2.5, z);
+  spire.castShadow = true;
+  group.add(spire);
+
+  // Flag pole with flag
+  const flagPoleMat = new THREE.MeshLambertMaterial({ color: 0x404a50 });
+  const flagPole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 3.2, 6), flagPoleMat);
+  flagPole.position.set(x + hallW / 2 + 0.5, baseY + 1.8, z);
+  flagPole.castShadow = true;
+  group.add(flagPole);
+
+  // Door entrance
+  const doorMat = new THREE.MeshLambertMaterial({ color: 0x2a3a4a });
+  const door = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.2, 0.08), doorMat);
+  door.position.set(x, baseY + 1.2, z + hallD / 2 + 0.05);
+  group.add(door);
+
+  // Mayor/clerk NPC beside the building
+  const npcX = x - hallW / 2 - 2.0;
+  const npcZ = z;
+  const npc = makeCrowdPerson(0x1a5a9a, 0x2a2a3a, 0x4a4a5a);
+  npc.position.set(npcX, baseY + 0.08, npcZ);
+  npc.rotation.y = Math.PI * 0.35;
+  npc.scale.setScalar(1.15);
+  group.add(npc);
+
+  return {
+    name: 'City Hall',
+    dialog: 'Welcome to City Hall — the heart of civic administration. Here you can find information about city services and events.',
+    ownerPos: { x: npcX, z: npcZ },
+    interactionRadius: 5.0,
+    prompt: 'Press E to visit City Hall',
+    minimapColor: '#76f7ff',
+  };
 }

@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>City Walk</title>
+  <link rel="icon" href="data:image/svg+xml;utf8,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'&gt;&lt;rect width='32' height='32' fill='%232a6fd8'/&gt;&lt;text x='16' y='22' font-size='20' text-anchor='middle' fill='white'&gt;C&lt;/text&gt;&lt;/svg&gt;" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #1a1f28;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #fff;
+    }
+    #gameCanvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+    .hud {
+      position: fixed;
+      pointer-events: none;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+      user-select: none;
+    }
+    #hud-title {
+      top: 14px;
+      left: 18px;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+    }
+    #hud-fps {
+      top: 14px;
+      right: 18px;
+      font-size: 14px;
+      background: rgba(0,0,0,0.35);
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    #hud-mute {
+      position: fixed;
+      top: 14px;
+      right: 82px;
+      pointer-events: auto;
+      user-select: none;
+      cursor: pointer;
+      color: #fff;
+      background: rgba(0,0,0,0.45);
+      border: 1px solid rgba(255,255,255,0.32);
+      border-radius: 4px;
+      padding: 4px 8px;
+      font: 700 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      letter-spacing: 0.08em;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+    }
+    #hud-mute:hover {
+      background: rgba(0,0,0,0.65);
+    }
+    #hud-mute[aria-pressed="true"] {
+      color: #ffd28a;
+      border-color: rgba(255,210,138,0.65);
+    }
+    #hud-sound-settings {
+      position: fixed;
+      top: 14px;
+      right: 148px;
+      pointer-events: auto;
+      user-select: none;
+      cursor: pointer;
+      color: #fff;
+      background: rgba(0,0,0,0.45);
+      border: 1px solid rgba(255,255,255,0.32);
+      border-radius: 4px;
+      padding: 4px 8px;
+      font: 700 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      letter-spacing: 0.08em;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+    }
+    #hud-sound-settings:hover { background: rgba(0,0,0,0.65); }
+    #sound-panel {
+      display: none;
+      position: fixed;
+      top: 46px;
+      right: 82px;
+      background: rgba(15,18,26,0.96);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 8px;
+      padding: 14px 18px;
+      min-width: 220px;
+      pointer-events: auto;
+      user-select: none;
+      z-index: 20;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+    }
+    #sound-panel h3 {
+      margin: 0 0 12px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      color: #ffd28a;
+      text-transform: uppercase;
+    }
+    .sound-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .sound-row:last-child { margin-bottom: 0; }
+    .sound-row label {
+      width: 80px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      color: rgba(255,255,255,0.85);
+      flex-shrink: 0;
+    }
+    .sound-row input[type=range] {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.2);
+      outline: none;
+      cursor: pointer;
+    }
+    .sound-row input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #ffd28a;
+      cursor: pointer;
+    }
+    .sound-row input[type=range]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #ffd28a;
+      border: none;
+      cursor: pointer;
+    }
+    .sound-val {
+      width: 28px;
+      text-align: right;
+      font-size: 11px;
+      color: rgba(255,255,255,0.55);
+      font-variant-numeric: tabular-nums;
+    }
+    #travel-panel {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(10,14,26,0.97);
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 10px;
+      padding: 22px 28px 18px;
+      min-width: 280px;
+      z-index: 30;
+      pointer-events: auto;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.7);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    #travel-panel h3 {
+      margin: 0 0 6px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      color: #60c8ff;
+      text-transform: uppercase;
+    }
+    #travel-panel p {
+      margin: 0 0 16px;
+      font-size: 12px;
+      color: rgba(255,255,255,0.6);
+    }
+    .travel-dest {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      margin-bottom: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s;
+      color: #fff;
+    }
+    .travel-dest:last-child { margin-bottom: 0; }
+    .travel-dest:hover { background: rgba(96,200,255,0.18); border-color: #60c8ff; }
+    .travel-dest-icon { font-size: 20px; width: 28px; text-align: center; }
+    .travel-dest-info { flex: 1; }
+    .travel-dest-name { font-size: 13px; font-weight: 600; }
+    .travel-dest-desc { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+    #travel-close {
+      margin-top: 14px;
+      width: 100%;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 5px;
+      color: rgba(255,255,255,0.5);
+      font-size: 11px;
+      padding: 6px;
+      cursor: pointer;
+      letter-spacing: 0.1em;
+    }
+    #travel-close:hover { border-color: rgba(255,255,255,0.5); color: #fff; }
+    #hud-pos {
+      bottom: 14px;
+      left: 18px;
+      font-size: 14px;
+      background: rgba(0,0,0,0.35);
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    #hud-hint {
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 13px;
+      opacity: 0.85;
+      background: rgba(0,0,0,0.35);
+      padding: 4px 10px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    #hud-gear {
+      display: none;
+      bottom: 286px;
+      right: 18px;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      background: rgba(0,0,0,0.55);
+      padding: 8px 14px;
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 6px;
+      min-width: 60px;
+      text-align: center;
+    }
+    #hud-gear .gear-label {
+      font-size: 11px;
+      opacity: 0.6;
+      font-weight: 500;
+      letter-spacing: 0.25em;
+      display: block;
+    }
+    /* Tachometer — shown while driving */
+    #hud-tach {
+      display: none;
+      position: fixed;
+      right: 18px;
+      bottom: 354px;
+      width: 260px;
+      background: rgba(0,0,0,0.55);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 8px;
+      padding: 8px 10px;
+      pointer-events: none;
+      user-select: none;
+    }
+    #hud-tach-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      opacity: 0.8;
+      letter-spacing: 0.15em;
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+    #hud-tach-bar {
+      position: relative;
+      height: 14px;
+      background: linear-gradient(90deg,
+        #2a6b2a 0%,
+        #4aae4a 40%,
+        #b5a833 65%,
+        #c47024 82%,
+        #c23030 92%,
+        #ff3030 100%);
+      border-radius: 3px;
+      overflow: hidden;
+      border: 1px solid rgba(0,0,0,0.4);
+    }
+    #hud-tach-cover {
+      position: absolute;
+      top: 0; right: 0; bottom: 0;
+      background: rgba(15,18,24,0.85);
+      width: 100%;
+      transition: width 0.06s linear;
+    }
+    #hud-tach-value {
+      font-size: 13px;
+      margin-top: 4px;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.04em;
+      display: flex;
+      justify-content: space-between;
+    }
+    #hud-shift-light {
+      display: none;
+      position: fixed;
+      right: 18px;
+      bottom: 220px;
+      background: #ff3030;
+      color: #fff;
+      font-weight: 800;
+      font-size: 14px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      letter-spacing: 0.15em;
+      box-shadow: 0 0 16px rgba(255,48,48,0.7);
+      animation: flashpulse 0.35s ease-in-out infinite alternate;
+    }
+    #hud-lug-light {
+      display: none;
+      position: fixed;
+      right: 18px;
+      bottom: 220px;
+      background: #e8a23a;
+      color: #1a1a1a;
+      font-weight: 800;
+      font-size: 14px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      letter-spacing: 0.15em;
+    }
+    #hud-stall {
+      display: none;
+      position: fixed;
+      left: 50%;
+      top: 35%;
+      transform: translate(-50%, -50%);
+      background: rgba(180,20,20,0.92);
+      color: #fff;
+      font-weight: 800;
+      font-size: 22px;
+      padding: 14px 24px;
+      border: 2px solid rgba(255,255,255,0.6);
+      border-radius: 10px;
+      letter-spacing: 0.12em;
+      text-align: center;
+      box-shadow: 0 0 32px rgba(200,20,20,0.6);
+    }
+    #hud-stall .sub {
+      font-size: 13px;
+      font-weight: 500;
+      opacity: 0.85;
+      margin-top: 6px;
+      letter-spacing: 0.04em;
+    }
+    @keyframes flashpulse {
+      from { opacity: 0.6; transform: scale(1.0); }
+      to   { opacity: 1.0; transform: scale(1.05); }
+    }
+    #hud-prompt {
+      display: none;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) translateY(60px);
+      font-size: 16px;
+      font-weight: 600;
+      background: rgba(0,0,0,0.65);
+      padding: 8px 14px;
+      border: 1px solid rgba(255,255,255,0.5);
+      border-radius: 6px;
+    }
+    #dialog {
+      display: none;
+      position: fixed;
+      bottom: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(600px, 80vw);
+      background: rgba(20,24,32,0.92);
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 10px;
+      padding: 16px 20px;
+      color: #fff;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      pointer-events: none;
+      user-select: none;
+    }
+    #dialog-name {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      letter-spacing: 0.04em;
+      color: #ffd28a;
+    }
+    #dialog-text {
+      font-size: 15px;
+      line-height: 1.4;
+      font-style: italic;
+    }
+    #dialog-close {
+      margin-top: 10px;
+      font-size: 12px;
+      opacity: 0.7;
+    }
+    #dialog-sale-hint {
+      display: none;
+      margin-top: 8px;
+      font-size: 13px;
+      color: #7ee2a6;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+    #sale-iframe-wrap {
+      display: none;
+      position: fixed;
+      right: 18px;
+      bottom: 224px;
+      width: min(420px, calc(100vw - 36px));
+      height: min(520px, calc(100vh - 260px));
+      min-height: 260px;
+      background: rgba(20,24,32,0.95);
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      overflow: hidden;
+      z-index: 10;
+    }
+    #sale-iframe-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: rgba(0,0,0,0.5);
+      color: #ffd28a;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    #sale-iframe-close {
+      cursor: pointer;
+      background: transparent;
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.4);
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 12px;
+    }
+    #sale-iframe {
+      width: 100%;
+      height: calc(100% - 36px);
+      border: 0;
+      background: #fff;
+    }
+    #minimap {
+      position: fixed;
+      bottom: 46px;
+      right: 18px;
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.4);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+      overflow: hidden;
+      pointer-events: none;
+      user-select: none;
+    }
+    #launch-fade {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      color: #fff;
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.8s linear;
+      z-index: 30;
+    }
+    body.launching #hud-title,
+    body.launching #hud-fps,
+    body.launching #hud-mute,
+    body.launching #hud-pos,
+    body.launching #hud-hint,
+    body.launching #minimap,
+    body.launching #hud-gear,
+    body.launching #hud-tach {
+      opacity: 0;
+      transition: opacity 0.6s ease;
+    }
+    #race-hud {
+      display: none;
+      position: fixed;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      pointer-events: none;
+      user-select: none;
+      z-index: 15;
+    }
+    #race-countdown {
+      display: none;
+      font-size: 80px;
+      font-weight: 900;
+      color: #fff;
+      text-shadow: 0 0 28px rgba(255,220,80,0.9), 0 2px 8px rgba(0,0,0,0.95);
+      letter-spacing: 0.05em;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    #race-stats {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.58);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 8px;
+      padding: 6px 18px;
+    }
+    #race-pos-label {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      opacity: 0.55;
+      line-height: 1;
+    }
+    #race-pos-val {
+      font-size: 26px;
+      font-weight: 900;
+      color: #ffd28a;
+      letter-spacing: 0.04em;
+      line-height: 1;
+    }
+    .race-divider {
+      width: 1px;
+      height: 30px;
+      background: rgba(255,255,255,0.2);
+      align-self: center;
+    }
+    #race-lap-val {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+    }
+    #race-time-val {
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.06em;
+      opacity: 0.8;
+    }
+    #race-finish-msg {
+      display: none;
+      margin-top: 8px;
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: 0.15em;
+      color: #ffd28a;
+      text-shadow: 0 0 16px rgba(255,210,80,0.7), 0 2px 4px rgba(0,0,0,0.9);
+      background: rgba(0,0,0,0.65);
+      padding: 6px 18px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,210,100,0.4);
+    }
+    @media (max-width: 720px) {
+      #sale-iframe-wrap {
+        right: 10px;
+        left: 10px;
+        bottom: 216px;
+        width: auto;
+        height: min(420px, calc(100vh - 250px));
+      }
+      #minimap {
+        right: 10px;
+        bottom: 44px;
+      }
+    }
+  </style>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+      }
+    }
+  </script>
+  <script type="module" crossorigin src="/assets/index-5lcthc8A.js"></script>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <div id="hud-title" class="hud">CITY WALK</div>
+  <div id="hud-fps" class="hud">FPS: --</div>
+  <button id="hud-mute" type="button" aria-pressed="false">MUTE</button>
+  <button id="hud-sound-settings" type="button">SOUND</button>
+  <div id="sound-panel">
+    <h3>Sound</h3>
+    <div class="sound-row">
+      <label for="vol-engine">Engine</label>
+      <input type="range" id="vol-engine" data-cat="engine" min="0" max="1" step="0.01" value="0.25">
+      <span class="sound-val" id="vol-engine-val">25%</span>
+    </div>
+    <div class="sound-row">
+      <label for="vol-ambient">Background</label>
+      <input type="range" id="vol-ambient" data-cat="ambient" min="0" max="1" step="0.01" value="0.6">
+      <span class="sound-val" id="vol-ambient-val">60%</span>
+    </div>
+    <div class="sound-row">
+      <label for="vol-traffic">Traffic</label>
+      <input type="range" id="vol-traffic" data-cat="traffic" min="0" max="1" step="0.01" value="0.6">
+      <span class="sound-val" id="vol-traffic-val">60%</span>
+    </div>
+    <div class="sound-row">
+      <label for="vol-sfx">SFX</label>
+      <input type="range" id="vol-sfx" data-cat="sfx" min="0" max="1" step="0.01" value="0.5">
+      <span class="sound-val" id="vol-sfx-val">50%</span>
+    </div>
+  </div>
+  <div id="travel-panel">
+    <h3>Travel Destinations</h3>
+    <p>Choose a location to visit</p>
+<div class="travel-dest" data-dest="niagara">
+      <div class="travel-dest-icon">🌊</div>
+      <div class="travel-dest-info">
+        <div class="travel-dest-name">Niagara Falls</div>
+        <div class="travel-dest-desc">Thunderous waterfalls on the border</div>
+      </div>
+    </div>
+    <div class="travel-dest" data-dest="everest">
+      <div class="travel-dest-icon">🏔️</div>
+      <div class="travel-dest-info">
+        <div class="travel-dest-name">Mount Everest</div>
+        <div class="travel-dest-desc">The world's highest peak</div>
+      </div>
+    </div>
+    <div class="travel-dest" data-dest="serengeti">
+      <div class="travel-dest-icon">🦁</div>
+      <div class="travel-dest-info">
+        <div class="travel-dest-name">Serengeti</div>
+        <div class="travel-dest-desc">African savanna — wildlife plains</div>
+      </div>
+    </div>
+    <div class="travel-dest" data-dest="bahamas">
+      <div class="travel-dest-icon">🏖️</div>
+      <div class="travel-dest-info">
+        <div class="travel-dest-name">The Bahamas</div>
+        <div class="travel-dest-desc">Crystal-clear Caribbean waters</div>
+      </div>
+    </div>
+    <div class="travel-dest" data-dest="amazon">
+      <div class="travel-dest-icon">🌿</div>
+      <div class="travel-dest-info">
+        <div class="travel-dest-name">Amazon Rainforest</div>
+        <div class="travel-dest-desc">The lungs of the Earth — vast jungle</div>
+      </div>
+    </div>
+    <button id="travel-close">ESC — CLOSE</button>
+  </div>
+  <div id="hud-pos" class="hud">X: 0.0  Z: 0.0</div>
+  <div id="hud-hint" class="hud">WASD move/steer · SHIFT sprint/boost · T auto/manual · 1-6 gears · 7 reverse · SPACE jump · E ride / talk / enter rocket · L launch · click for mouse-look</div>
+  <div id="hud-prompt" class="hud"></div>
+  <div id="hud-gear" class="hud"><span class="gear-label">GEAR</span><span id="hud-gear-val">1</span></div>
+  <div id="hud-tach">
+    <div id="hud-tach-row"><span>RPM</span><span id="hud-tach-gear">GEAR 1</span></div>
+    <div id="hud-tach-bar"><div id="hud-tach-cover"></div></div>
+    <div id="hud-tach-value"><span id="hud-rpm-num">1400</span><span id="hud-speed-num">0 km/h</span></div>
+  </div>
+  <div id="hud-shift-light">▲ SHIFT UP</div>
+  <div id="hud-lug-light">▼ DOWNSHIFT</div>
+  <div id="hud-stall">ENGINE STALLED<div class="sub">Press 1 to restart</div></div>
+  <div id="dialog">
+    <div id="dialog-name"></div>
+    <div id="dialog-text"></div>
+    <div id="dialog-sale-hint">Press F to view on WhatsLocal</div>
+    <div id="dialog-close">Press E or ESC to close</div>
+  </div>
+  <div id="sale-iframe-wrap">
+    <div id="sale-iframe-header">
+      <span id="sale-iframe-title">Sale</span>
+      <button id="sale-iframe-close" type="button">Close</button>
+    </div>
+    <iframe id="sale-iframe" src="about:blank" title="Sale"></iframe>
+  </div>
+  <canvas id="minimap" width="160" height="160"></canvas>
+  <div id="launch-fade">ENTERING SPACE</div>
+  <div id="race-hud">
+    <div id="race-countdown"></div>
+    <div id="race-stats">
+      <div>
+        <div id="race-pos-label">POS</div>
+        <div id="race-pos-val">1</div>
+      </div>
+      <div class="race-divider"></div>
+      <div id="race-lap-val">LAP 1/3</div>
+      <div class="race-divider"></div>
+      <div id="race-time-val">0:00.0</div>
+    </div>
+    <div id="race-finish-msg"></div>
+  </div>
+</body>
+</html>
