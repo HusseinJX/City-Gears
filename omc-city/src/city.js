@@ -173,8 +173,11 @@ export function createCity(scene) {
   const forcedParkJ = clamp(centerRoadJ - 1, 0, zAxis.length - 2);
   const facilityI = clamp(centerRoadI, 0, xAxis.length - 2);
   const facilityJ = clamp(centerRoadJ - 1, 0, zAxis.length - 2);
+  const cityHallI = clamp(centerRoadI + 1, 0, xAxis.length - 2);
+  const cityHallJ = clamp(centerRoadJ, 0, zAxis.length - 2);
   let spawnParkBlock = null;
   let spaceFacilityBlock = null;
+  let cityHallBlock = null;
 
   // ---------- Per-block content ----------
   for (let i = 0; i < xAxis.length - 1; i++) {
@@ -209,6 +212,7 @@ export function createCity(scene) {
       else type = 'mixed';
       if (i === forcedParkI && j === forcedParkJ) type = 'park';
       if (i === facilityI && j === facilityJ) type = 'spaceFacility';
+      if (i === cityHallI && j === cityHallJ) type = 'park';
 
       const block = {
         x: cx, z: cz, width, depth,
@@ -218,6 +222,7 @@ export function createCity(scene) {
       blocks.push(block);
       if (type === 'park' && i === forcedParkI && j === forcedParkJ) spawnParkBlock = block;
       if (type === 'spaceFacility') spaceFacilityBlock = block;
+      if (i === cityHallI && j === cityHallJ) cityHallBlock = block;
 
       // Interior area where buildings can live (minus sidewalks)
       const innerW = width - C.sidewalkWidth * 2;
@@ -248,7 +253,7 @@ export function createCity(scene) {
 
   const shops = generateShops(group, blocks);
   shops.push(addSpaceAgeVisionAttraction(group, spawnParkBlock, spawn));
-  shops.push(addCityHall(group, spawn, spawnParkBlock));
+  shops.push(addCityHall(group, spawn, cityHallBlock));
   const rocket = addRocketLaunchSite(group, spaceFacilityBlock, spawn);
   const airplaneLandmark = addAirplaneBuilding(group, spawnParkBlock, spawn, buildingAABBs);
   if (airplaneLandmark.shop) shops.push(airplaneLandmark.shop);
