@@ -37,6 +37,7 @@ function init() {
   cityInfo.shops.push(everestInfo.returnShop);
   const cityHallInterior = createCityHallInterior(scene);
   cityInfo.shops.push(cityHallInterior.returnShop);
+  cityInfo.shops.push(...cityHallInterior.cornerSpots);
   const propsInfo = createProps(scene, cityInfo);
 
   const character = createCharacter();

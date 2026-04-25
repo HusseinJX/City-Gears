@@ -1,6 +1,54 @@
 import * as THREE from 'three';
 
 const GX = 1200, GZ = 0;
+
+function makeCrowdPerson(shirtColor, pantsColor, hatColor = null) {
+  const g = new THREE.Group();
+  const skinMat = new THREE.MeshLambertMaterial({ color: 0xf3c8a4 });
+  const shirtMat = new THREE.MeshLambertMaterial({ color: shirtColor });
+  const pantsMat = new THREE.MeshLambertMaterial({ color: pantsColor });
+  const legs = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.85, 0.28), pantsMat);
+  legs.position.y = 0.425; legs.castShadow = true; g.add(legs);
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.62, 0.3), shirtMat);
+  torso.position.y = 1.16; torso.castShadow = true; g.add(torso);
+  const armGeo = new THREE.BoxGeometry(0.12, 0.55, 0.13);
+  for (const sx of [-0.29, 0.29]) {
+    const arm = new THREE.Mesh(armGeo, shirtMat);
+    arm.position.set(sx, 1.16, 0); arm.castShadow = true; g.add(arm);
+  }
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.32, 0.32), skinMat);
+  head.position.y = 1.68; head.castShadow = true; g.add(head);
+  if (hatColor !== null) {
+    const hat = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.08, 0.36),
+      new THREE.MeshLambertMaterial({ color: hatColor }));
+    hat.position.y = 1.9; hat.castShadow = true; g.add(hat);
+  }
+  return g;
+}
+
+function makeCHSignTexture(title, subtitle, bgColor) {
+  const W = 512, H = 160;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#' + bgColor.toString(16).padStart(6, '0');
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(4, 4, W - 8, H - 8);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 44px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(title, W / 2, 72);
+  ctx.fillStyle = '#a8ccff';
+  ctx.font = '21px monospace';
+  ctx.fillText(subtitle, W / 2, 120);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
 // Room local: X -28..+28, Z 0..70, H 26
 const RW = 56, RD = 70, RH = 26, WT = 1.2;
 
@@ -266,6 +314,147 @@ export function createCityHallInterior(scene) {
     group.add(bulb);
   }
 
+  // ── CORNER CROWDS ─────────────────────────────────────────────────
+  const floorY = 0.2;
+  const crowdColors = [0x5a8ad8, 0xd85a8a, 0x5ad88a, 0xd8c05a, 0xa85ad8, 0x5ad8d8];
+  const crowdOffsets = [
+    [-1.8, -1.8], [-0.6, -2.1], [0.6, -1.9], [1.8, -1.7],
+    [-2.0, -0.6], [-0.8, -0.4], [0.5, -0.7], [1.9, -0.5],
+    [-1.7,  0.8], [-0.5,  0.6], [0.7,  0.9], [2.0,  0.7],
+    [-1.5,  2.0], [-0.3,  1.9], [0.9,  2.1], [2.1,  1.8],
+  ];
+
+  const cornerDefs = [
+    { cx: -20, cz:  7, label: 'Voting',       sub: 'sovereign-nexus.netlify.app',        url: 'https://sovereign-nexus.netlify.app/',        bgColor: 0x1a3a8a, lightColor: 0x6688ff, wallSide: -1 },
+    { cx:  20, cz:  7, label: 'Projects',      sub: 'spaceagevision.world',               url: 'https://spaceagevision.world',                bgColor: 0x1a5a4a, lightColor: 0x44ddaa, wallSide: +1 },
+    { cx: -20, cz: 57, label: 'Ideas & Tools', sub: 'ideaboard-app.netlify.app',          url: 'https://ideaboard-app.netlify.app/',          bgColor: 0x4a1a7a, lightColor: 0xcc88ff, wallSide: -1 },
+    { cx:  20, cz: 57, label: 'Community',     sub: 'commonground-community.netlify.app', url: 'https://commonground-community.netlify.app/', bgColor: 0x5a2a0a, lightColor: 0xff9966, wallSide: +1 },
+  ];
+
+  const cornerSpots = cornerDefs.map(({ cx, cz, label, sub, url, bgColor, lightColor, wallSide }) => {
+    const signX = wallSide < 0 ? -(RW / 2 - 0.65) : (RW / 2 - 0.65);
+    const signZ = cz;
+    const signY = 4.8;
+
+    // Sign board — normal must face into the room (+X for left wall, -X for right wall)
+    const tex = makeCHSignTexture(label, sub, bgColor);
+    const signMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(5.2, 1.7),
+      new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide })
+    );
+    signMesh.position.set(signX, signY, signZ);
+    signMesh.rotation.y = wallSide < 0 ? Math.PI / 2 : -Math.PI / 2;
+    group.add(signMesh);
+
+    // Sign post pair (along Z, flanking the sign)
+    const postMat = new THREE.MeshLambertMaterial({ color: 0x2a2218 });
+    for (const dz of [-2.3, 2.3]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 3.5, 0.14), postMat);
+      post.position.set(signX, signY - 0.75, signZ + dz);
+      post.castShadow = true;
+      group.add(post);
+    }
+
+    // Corner accent light
+    const al = new THREE.PointLight(lightColor, 0.9, 22);
+    al.position.set(cx, 5, cz);
+    group.add(al);
+
+    // Crowd — people face the sign on the wall
+    crowdOffsets.forEach(([ox, oz], i) => {
+      const person = makeCrowdPerson(
+        crowdColors[i % crowdColors.length],
+        0x202028 + (i % 3) * 0x101010,
+        i % 4 === 0 ? 0xffd060 : null
+      );
+      person.position.set(cx + ox, floorY, cz + oz);
+      person.rotation.y = Math.atan2(signX - (cx + ox), signZ - (cz + oz));
+      person.scale.setScalar(1.1);
+      group.add(person);
+    });
+
+    return {
+      name: label,
+      dialog: `A crowd has gathered here around the ${label} station. Their ideas and voices are being heard.`,
+      prompt: `Press E — ${label}`,
+      siteUrl: url,
+      siteLabel: sub,
+      siteTitle: label,
+      ownerPos: { x: GX + cx, z: GZ + cz },
+      interactionRadius: 5.5,
+    };
+  });
+
+  // ── CENTER PODIUM (mic + laptop + glow) ──────────────────────────
+  const podX = 0, podZ = 18;
+  const darkWood = new THREE.MeshLambertMaterial({ color: 0x2a1e10, emissive: 0x080604, emissiveIntensity: 0.3 });
+  const silverMat = new THREE.MeshLambertMaterial({ color: 0xb8c4cc, emissive: 0x304050, emissiveIntensity: 0.3 });
+
+  // Podium body + ledge + accent trim
+  box(1.6, 1.2, 0.9, podX, 0.7, podZ, darkWood);
+  box(1.85, 0.08, 1.05, podX, 1.34, podZ, stone);
+  box(1.55, 0.06, 0.05, podX, 0.3, podZ - 0.46, gold);
+
+  // Mic stand
+  const micStand = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.07, 1.6, 8), silverMat);
+  micStand.position.set(podX - 0.28, 2.14, podZ - 0.05);
+  micStand.castShadow = true; group.add(micStand);
+
+  // Mic arm (angled toward speaker)
+  const micArm = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.42, 6), silverMat);
+  micArm.rotation.z = Math.PI / 2;
+  micArm.position.set(podX - 0.07, 2.96, podZ - 0.2);
+  group.add(micArm);
+
+  // Mic capsule
+  const micCap = new THREE.Mesh(
+    new THREE.SphereGeometry(0.1, 8, 6),
+    new THREE.MeshLambertMaterial({ color: 0x909098, emissive: 0x181820, emissiveIntensity: 0.5 })
+  );
+  micCap.position.set(podX + 0.12, 2.98, podZ - 0.26);
+  group.add(micCap);
+
+  // Laptop base (keyboard deck)
+  const laptopMat = new THREE.MeshLambertMaterial({ color: 0x181c28 });
+  const laptopBase = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.04, 0.56), laptopMat);
+  laptopBase.position.set(podX + 0.22, 1.4, podZ + 0.02);
+  laptopBase.castShadow = true; group.add(laptopBase);
+
+  // Laptop lid (dark frame)
+  const laptopLid = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.52, 0.045), laptopMat);
+  laptopLid.position.set(podX + 0.22, 1.705, podZ - 0.243);
+  laptopLid.rotation.x = -0.35;
+  laptopLid.castShadow = true; group.add(laptopLid);
+
+  // Screen (glowing, inset inside lid)
+  const screenMat = new THREE.MeshLambertMaterial({ color: 0x0a1830, emissive: 0x1a4878, emissiveIntensity: 2.2 });
+  const laptopScreen = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.44, 0.046), screenMat);
+  laptopScreen.position.set(podX + 0.22, 1.705, podZ - 0.244);
+  laptopScreen.rotation.x = -0.35;
+  group.add(laptopScreen);
+
+  // Glow disc on floor beneath podium
+  const glowDiscMat = new THREE.MeshLambertMaterial({
+    color: 0x40a8ff, emissive: 0x1040aa, emissiveIntensity: 1.2, transparent: true, opacity: 0.55,
+  });
+  const glowDisc = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.05, 28), glowDiscMat);
+  glowDisc.position.set(podX, 0.22, podZ);
+  group.add(glowDisc);
+
+  // Pulsing outer ring
+  const glowRing = new THREE.Mesh(
+    new THREE.TorusGeometry(1.1, 0.055, 8, 32),
+    new THREE.MeshLambertMaterial({ color: 0x76f7ff, emissive: 0x204060, emissiveIntensity: 2.0 })
+  );
+  glowRing.rotation.x = Math.PI / 2;
+  glowRing.position.set(podX, 0.25, podZ);
+  group.add(glowRing);
+
+  // Podium point light — cool blue
+  const podLight = new THREE.PointLight(0x60c8ff, 1.5, 18);
+  podLight.position.set(podX, 4, podZ);
+  group.add(podLight);
+
   // ── LIGHTING ─────────────────────────────────────────────────────
   group.add(new THREE.AmbientLight(0xfff4e0, 0.7));
   const sun = new THREE.PointLight(0xffd880, 1.4, 75);
@@ -293,6 +482,7 @@ export function createCityHallInterior(scene) {
     spawnZ: CITYHALL_SPAWN_Z,
     wallMeshes,
     wallAABBs,
+    cornerSpots,
     returnShop: {
       name: 'City Hall',
       dialog: 'You are in the grand civic rotunda. The dome above dates to the classical revival era. Press F to exit to the city.',
