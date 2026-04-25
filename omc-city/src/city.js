@@ -1251,96 +1251,111 @@ function addAirplaneBuilding(group, block, spawn, AABBs) {
 function addCityHall(group, spawn, nearbyBlock) {
   const C = CONFIG.city;
   const baseY = C.sidewalkHeight;
-  // Position within a nearby block, or use a fallback offset from spawn
-  const x = nearbyBlock ? nearbyBlock.x + nearbyBlock.width * 0.3 : spawn.x - 20;
-  const z = nearbyBlock ? nearbyBlock.z - nearbyBlock.depth * 0.22 : spawn.z + 18;
+  const x = nearbyBlock ? nearbyBlock.x : spawn.x + 20;
+  const z = nearbyBlock ? nearbyBlock.z : spawn.z + 15;
 
-  // Main building — wider and taller, classical proportions
-  const hallW = 8.5;
-  const hallD = 10;
-  const hallH = 7.5;
-  const hallMat = new THREE.MeshLambertMaterial({ color: 0xc4b5a0 });
+  const hallWrapper = new THREE.Group();
+  hallWrapper.position.set(x, baseY, z);
+  group.add(hallWrapper);
+
+  // Classical main building body — long and grand
+  const hallW = 12;
+  const hallD = 7;
+  const hallH = 8;
+  const hallMat = new THREE.MeshLambertMaterial({ color: 0xf5f5f0 });
   const hall = new THREE.Mesh(new THREE.BoxGeometry(hallW, hallH, hallD), hallMat);
-  hall.position.set(x, baseY + hallH / 2, z);
+  hall.position.y = hallH / 2;
   hall.castShadow = true;
   hall.receiveShadow = true;
-  group.add(hall);
+  hallWrapper.add(hall);
 
-  // Large front columns (4 pillars)
-  const columnH = hallH * 0.85;
-  const columnR = 0.32;
-  const columnMat = new THREE.MeshLambertMaterial({ color: 0xd9ccc1 });
-  const columnGeo = new THREE.CylinderGeometry(columnR, columnR, columnH, 8);
-  const colOffsets = [
-    [-hallW / 2 + 1.2, hallD / 2 + 0.3],
-    [hallW / 2 - 1.2, hallD / 2 + 0.3],
-    [-hallW / 2 + 1.2, hallD / 2 - 0.8],
-    [hallW / 2 - 1.2, hallD / 2 - 0.8],
-  ];
-  colOffsets.forEach(([ox, oz]) => {
+  // Grand columned portico — many classical columns across front
+  const columnH = hallH * 0.9;
+  const columnR = 0.35;
+  const columnMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  const columnGeo = new THREE.CylinderGeometry(columnR, columnR, columnH, 10);
+  const numColumns = 10;
+  const colSpacing = hallW / (numColumns + 1);
+  for (let i = 1; i <= numColumns; i++) {
     const col = new THREE.Mesh(columnGeo, columnMat);
-    col.position.set(x + ox, baseY + columnH / 2, z + oz);
+    col.position.set(-hallW / 2 + colSpacing * i, columnH / 2, hallD / 2 + 0.4);
     col.castShadow = true;
-    group.add(col);
-  });
+    hallWrapper.add(col);
+  }
 
-  // Pediment (triangular roof detail)
-  const pedMat = new THREE.MeshLambertMaterial({ color: 0x5a4a3a });
-  const pediment = new THREE.Mesh(new THREE.BoxGeometry(hallW + 0.6, 0.3, hallD * 0.35), pedMat);
-  pediment.position.set(x, baseY + hallH + 0.15, z + hallD / 2 + 0.1);
+  // Triangular pediment above columns
+  const pedMat = new THREE.MeshLambertMaterial({ color: 0xe8e8e0 });
+  const pediment = new THREE.Mesh(new THREE.BoxGeometry(hallW + 1, 0.4, hallD * 0.3), pedMat);
+  pediment.position.set(0, hallH + 0.2, hallD / 2 + 0.15);
   pediment.castShadow = true;
-  group.add(pediment);
+  hallWrapper.add(pediment);
 
-  // Window grid on front
-  const windowMat = new THREE.MeshLambertMaterial({ color: 0x5fa8c8, emissive: 0x1a3a4a, emissiveIntensity: 0.3 });
-  const windowW = 1.1, windowH = 1.0;
-  const windowPositions = [
-    [-2.5, 5.5], [0, 5.5], [2.5, 5.5],
-    [-2.5, 3.8], [0, 3.8], [2.5, 3.8],
-    [-2.5, 2.1], [0, 2.1], [2.5, 2.1],
-  ];
-  windowPositions.forEach(([ox, oy]) => {
-    const win = new THREE.Mesh(new THREE.BoxGeometry(windowW, windowH, 0.08), windowMat);
-    win.position.set(x + ox, baseY + oy, z + hallD / 2 + 0.05);
-    group.add(win);
-  });
+  // Row of tall arched windows/doors on front facade
+  const windowMat = new THREE.MeshLambertMaterial({ color: 0x4a7a9a, emissive: 0x1a3a5a, emissiveIntensity: 0.5 });
+  const numWindows = 9;
+  const winSpacing = hallW / (numWindows + 1);
+  for (let i = 1; i <= numWindows; i++) {
+    const win = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.6, 0.1), windowMat);
+    win.position.set(-hallW / 2 + winSpacing * i, 4.2, hallD / 2 + 0.05);
+    hallWrapper.add(win);
+  }
 
-  // Cupola (domed roof structure on top)
-  const cupolaBaseMat = new THREE.MeshLambertMaterial({ color: 0x3a4a5a });
-  const cupolaBase = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.0, 0.5, 16), cupolaBaseMat);
-  cupolaBase.position.set(x, baseY + hallH + 0.25, z);
-  cupolaBase.castShadow = true;
-  group.add(cupolaBase);
+  // Second row of smaller windows
+  for (let i = 1; i <= numWindows; i++) {
+    const win = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.2, 0.1), windowMat);
+    win.position.set(-hallW / 2 + winSpacing * i, 2.2, hallD / 2 + 0.05);
+    hallWrapper.add(win);
+  }
 
-  const cupola = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 12), new THREE.MeshLambertMaterial({ color: 0x4a6a8a }));
-  cupola.position.set(x, baseY + hallH + 1.2, z);
-  cupola.castShadow = true;
-  group.add(cupola);
+  // Grand domed cupola in center
+  const domeBotMat = new THREE.MeshLambertMaterial({ color: 0xc0c0b8 });
+  const domeBase = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.5, 0.6, 24), domeBotMat);
+  domeBase.position.set(0, hallH + 0.3, 0);
+  domeBase.castShadow = true;
+  hallWrapper.add(domeBase);
 
-  const spire = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.6, 8), new THREE.MeshLambertMaterial({ color: 0x8a7a6a }));
-  spire.position.set(x, baseY + hallH + 2.5, z);
+  const domeMat = new THREE.MeshLambertMaterial({ color: 0xa8a89a });
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(2.0, 20, 16, 0, Math.PI * 2, 0, Math.PI / 2), domeMat);
+  dome.position.set(0, hallH + 1.5, 0);
+  dome.castShadow = true;
+  hallWrapper.add(dome);
+
+  // Gold spire on top
+  const spireMat = new THREE.MeshLambertMaterial({ color: 0xd4af37, emissive: 0x6a5a1a, emissiveIntensity: 0.4 });
+  const spire = new THREE.Mesh(new THREE.ConeGeometry(0.35, 2.2, 12), spireMat);
+  spire.position.set(0, hallH + 3.1, 0);
   spire.castShadow = true;
-  group.add(spire);
+  hallWrapper.add(spire);
 
-  // Flag pole with flag
-  const flagPoleMat = new THREE.MeshLambertMaterial({ color: 0x404a50 });
-  const flagPole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 3.2, 6), flagPoleMat);
-  flagPole.position.set(x + hallW / 2 + 0.5, baseY + 1.8, z);
-  flagPole.castShadow = true;
-  group.add(flagPole);
+  // Flag poles on sides of dome
+  const flagPoleMat = new THREE.MeshLambertMaterial({ color: 0x606060 });
+  for (const side of [-1.8, 1.8]) {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 3.5, 8), flagPoleMat);
+    pole.position.set(side, hallH + 1.8, 0);
+    pole.castShadow = true;
+    hallWrapper.add(pole);
+  }
 
-  // Door entrance
-  const doorMat = new THREE.MeshLambertMaterial({ color: 0x2a3a4a });
-  const door = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.2, 0.08), doorMat);
-  door.position.set(x, baseY + 1.2, z + hallD / 2 + 0.05);
-  group.add(door);
+  // Grand central arched entrance
+  const doorMat = new THREE.MeshLambertMaterial({ color: 0x3a3a36 });
+  const door = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.8, 0.12), doorMat);
+  door.position.set(0, 1.5, hallD / 2 + 0.06);
+  hallWrapper.add(door);
 
-  // Mayor/clerk NPC beside the building
-  const npcX = x - hallW / 2 - 2.0;
-  const npcZ = z;
+  // Arched window above door
+  const archWin = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.0, 0.1), windowMat);
+  archWin.position.set(0, 4.2, hallD / 2 + 0.05);
+  hallWrapper.add(archWin);
+
+  // Rotate so entrance faces toward center of park
+  hallWrapper.rotation.y = Math.PI;
+
+  // Mayor/clerk NPC in front of entrance (center of park)
+  const npcX = x;
+  const npcZ = z - (hallD / 2 + 1.5);
   const npc = makeCrowdPerson(0x1a5a9a, 0x2a2a3a, 0x4a4a5a);
   npc.position.set(npcX, baseY + 0.08, npcZ);
-  npc.rotation.y = Math.PI * 0.35;
+  npc.rotation.y = Math.PI * 0.5;
   npc.scale.setScalar(1.15);
   group.add(npc);
 
