@@ -248,7 +248,7 @@ export function createCity(scene) {
 
   const shops = generateShops(group, blocks);
   shops.push(addSpaceAgeVisionAttraction(group, spawnParkBlock, spawn));
-  shops.push(addCityHall(group, spawn));
+  shops.push(addCityHall(group, spawn, spawnParkBlock));
   const rocket = addRocketLaunchSite(group, spaceFacilityBlock, spawn);
   const airplaneLandmark = addAirplaneBuilding(group, spawnParkBlock, spawn, buildingAABBs);
   if (airplaneLandmark.shop) shops.push(airplaneLandmark.shop);
@@ -1243,11 +1243,12 @@ function addAirplaneBuilding(group, block, spawn, AABBs) {
 }
 
 // ---------- City Hall (placed next to spawn) ----------
-function addCityHall(group, spawn) {
+function addCityHall(group, spawn, nearbyBlock) {
   const C = CONFIG.city;
   const baseY = C.sidewalkHeight;
-  const x = spawn.x + 15;
-  const z = spawn.z - 8;
+  // Position within a nearby block, or use a fallback offset from spawn
+  const x = nearbyBlock ? nearbyBlock.x + nearbyBlock.width * 0.3 : spawn.x - 20;
+  const z = nearbyBlock ? nearbyBlock.z - nearbyBlock.depth * 0.22 : spawn.z + 18;
 
   // Main building — wider and taller, classical proportions
   const hallW = 8.5;
