@@ -1246,8 +1246,8 @@ function addAirplaneBuilding(group, block, spawn, AABBs) {
 function addCityHall(group, spawn) {
   const C = CONFIG.city;
   const baseY = C.sidewalkHeight;
-  const x = spawn.x - 12;
-  const z = spawn.z + 8;
+  const x = spawn.x + 15;
+  const z = spawn.z - 8;
 
   // Main building — wider and taller, classical proportions
   const hallW = 8.5;
