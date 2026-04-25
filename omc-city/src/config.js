@@ -30,13 +30,13 @@ export const CONFIG = {
     minBlockSize: 22,          // smallest block dimension
     maxBlockSize: 56,          // largest block dimension
     roadWidth: 9,              // street width between blocks
-    sidewalkWidth: 2.2,
+    sidewalkWidth: 3.5,
     sidewalkHeight: 0.18,
     minBuildingsPerBlock: 3,
     maxBuildingsPerBlock: 9,
     minBuildingHeight: 4,
     maxBuildingHeight: 52,
-    buildingMargin: 0.6,
+    buildingMargin: 1.5,
     // Block-type probabilities (fall through to 'mixed')
     towerChance: 0.09,
     parkChance: 0.12,

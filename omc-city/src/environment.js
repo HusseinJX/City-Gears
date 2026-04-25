@@ -10,7 +10,8 @@ export function createEnvironment(scene, renderer) {
   scene.fog = new THREE.FogExp2(CONFIG.skyHorizonColor, CONFIG.fogDensity);
 
   // Ambient light
-  scene.add(new THREE.AmbientLight(CONFIG.ambientColor, CONFIG.ambientIntensity));
+  const ambient = new THREE.AmbientLight(CONFIG.ambientColor, CONFIG.ambientIntensity);
+  scene.add(ambient);
 
   // Hemisphere fill for soft top/bottom variation
   const hemi = new THREE.HemisphereLight(CONFIG.skyTopColor, CONFIG.groundColor, 0.35);
@@ -48,5 +49,5 @@ export function createEnvironment(scene, renderer) {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   }
 
-  return { sun, ground };
+  return { sun, ground, ambient, hemi };
 }
