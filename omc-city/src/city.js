@@ -1287,6 +1287,57 @@ function addCityHall(group, spawn, nearbyBlock, buildingAABBs) {
   topCornice.castShadow = true;
   hallWrapper.add(topCornice);
 
+  // ── REAR EXTENSION (deeper back section, same width) ────────────
+  const extD = 7, extH = hallH - 1;
+  const extZ = -(hallD / 2 + extD / 2);
+  const rearExt = new THREE.Mesh(new THREE.BoxGeometry(hallW, extH, extD), ivory);
+  rearExt.position.set(0, extH / 2, extZ);
+  rearExt.castShadow = true; rearExt.receiveShadow = true;
+  hallWrapper.add(rearExt);
+
+  // Rear extension plinth
+  const rearPlinth = new THREE.Mesh(new THREE.BoxGeometry(hallW + 0.4, 0.55, extD + 0.4), stone);
+  rearPlinth.position.set(0, 0.275, extZ);
+  hallWrapper.add(rearPlinth);
+
+  // Rear extension cornice
+  const rearCornice = new THREE.Mesh(new THREE.BoxGeometry(hallW + 0.5, 0.5, extD + 0.5), stone);
+  rearCornice.position.set(0, extH + 0.25, extZ);
+  rearCornice.castShadow = true;
+  hallWrapper.add(rearCornice);
+
+  // Rear extension windows — back face
+  const rearFaceZ = extZ - extD / 2 - 0.06;
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col < 4; col++) {
+      const wx = -hallW / 2 + 2.2 + col * (hallW - 4.4) / 3;
+      const wy = 2.2 + row * 2.8;
+      const rwin = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.6, 0.1), winMat);
+      rwin.position.set(wx, wy, rearFaceZ);
+      hallWrapper.add(rwin);
+      const rped = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.22, 0.1), stone);
+      rped.position.set(wx, wy + 1.0, rearFaceZ);
+      hallWrapper.add(rped);
+    }
+  }
+
+  // Rear extension windows — side faces
+  for (const side of [-1, 1]) {
+    const sideX = side * (hallW / 2 + 0.06);
+    for (let row = 0; row < 2; row++) {
+      for (let col = 0; col < 3; col++) {
+        const wz = extZ - extD / 2 + 2.0 + col * (extD - 4.0) / 2;
+        const wy = 2.2 + row * 2.8;
+        const swin = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.6, 0.85), winMat);
+        swin.position.set(sideX, wy, wz);
+        hallWrapper.add(swin);
+        const sped = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.22, 1.05), stone);
+        sped.position.set(sideX, wy + 1.0, wz);
+        hallWrapper.add(sped);
+      }
+    }
+  }
+
   // Windows on main building front (flanking portico opening)
   const frontWinZ = hallD / 2 + 0.06;
   for (const side of [-1, 1]) {
@@ -1464,14 +1515,14 @@ function addCityHall(group, spawn, nearbyBlock, buildingAABBs) {
     hallWrapper.add(flag);
   }
 
-  // Register collision box for the full building footprint (includes portico)
+  // Register collision box for the full building footprint (includes portico and rear extension)
   // After rotation.y=PI the portico faces world -Z, back faces world +Z
   if (buildingAABBs) {
     buildingAABBs.push({
       minX: x - hallW / 2 - 0.3,
       maxX: x + hallW / 2 + 0.3,
       minZ: z - (hallD / 2 + porticoD + numSteps * stepD),
-      maxZ: z + hallD / 2 + 0.3,
+      maxZ: z + hallD / 2 + extD + 0.3,
     });
   }
 
